@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -93,7 +95,31 @@ class AddConnectionDialog(QDialog):
         self.group_input.setCurrentText("Default")
         form_layout.addRow("Group:", self.group_input)
 
+        # Icon
+        icon_layout = QHBoxLayout()
+        self.icon_input = QLineEdit()
+        self.icon_input.setPlaceholderText("e.g. proxmox, home-assistant")
+        self.icon_input.textChanged.connect(self._update_icon_preview_from_text)
+
+        self.icon_preview = QLabel("No Icon")
+        self.icon_preview.setFixedSize(32, 32)
+        self.icon_preview.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
+        self.icon_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        icon_layout.addWidget(self.icon_input)
+        icon_layout.addWidget(self.icon_preview)
+        form_layout.addRow("Icon:", icon_layout)
+
+        # Connect name change to auto-fill icon (only if icon is empty)
+        self.name_input.textChanged.connect(self._auto_fill_icon)
+
         layout.addLayout(form_layout)
+
+        # Initialize icon manager
+        from sshive.ui.icon_manager import IconManager
+
+        self.icon_manager = IconManager.instance()
+        self.icon_manager.icon_loaded.connect(self._on_icon_loaded)
 
         # Info label
         info_label = QLabel(
@@ -144,6 +170,58 @@ class AddConnectionDialog(QDialog):
         if self.connection.group:
             self.group_input.setCurrentText(self.connection.group)
 
+        if self.connection.icon:
+            self.icon_input.setText(self.connection.icon)
+
+        if self.connection.icon:
+            self.icon_input.setText(self.connection.icon)
+            self._update_icon_preview(self.connection.icon)
+
+    def _update_icon_preview_from_text(self, text):
+        """Update icon preview based on text input."""
+        self._update_icon_preview(text)
+
+    def _update_icon_preview(self, icon_name):
+        """Update the icon preview label."""
+        if not icon_name:
+            self.icon_preview.clear()
+            self.icon_preview.setText("No Icon")
+            return
+
+        from sshive.ui.icon_manager import IconManager
+
+        manager = IconManager.instance()
+
+        # Try to get cached icon
+        icon_path = manager.get_icon_path(icon_name)
+        if icon_path and Path(icon_path).exists():
+            pixmap = QPixmap(str(icon_path))
+            self.icon_preview.setPixmap(
+                pixmap.scaled(
+                    32,
+                    32,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        else:
+            # Trigger fetch if not cached
+            manager.fetch_icon(icon_name)
+            self.icon_preview.setText("Loading...")
+
+    def _on_icon_loaded(self, name, path):
+        """Handle icon loaded signal."""
+        if self.icon_input.text() == name:
+            self._update_icon_preview(name)
+
+    def _auto_fill_icon(self, name):
+        """Auto-fill icon field based on connection name."""
+        if not self.icon_input.text():
+            # Convert name to kebab-case-ish (simplified)
+            icon_name = name.lower().replace(" ", "-")
+            self.icon_input.setText(icon_name)
+            self._update_icon_preview(icon_name)
+
     def get_connection(self) -> SSHConnection | None:
         """Get connection from form data.
 
@@ -160,6 +238,7 @@ class AddConnectionDialog(QDialog):
 
         key_path = self.key_input.text().strip() or None
         group = self.group_input.currentText().strip() or "Default"
+        icon = self.icon_input.text().strip() or None
 
         try:
             if self.connection:
@@ -170,6 +249,7 @@ class AddConnectionDialog(QDialog):
                 self.connection.port = self.port_input.value()
                 self.connection.key_path = key_path
                 self.connection.group = group
+                self.connection.icon = icon
                 return self.connection
             else:
                 # Create new connection
@@ -180,6 +260,7 @@ class AddConnectionDialog(QDialog):
                     port=self.port_input.value(),
                     key_path=key_path,
                     group=group,
+                    icon=icon,
                 )
         except ValueError as e:
             print(f"Validation error: {e}")

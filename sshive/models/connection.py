@@ -16,6 +16,7 @@ class SSHConnection:
         key_path: Path to SSH private key (optional)
         group: Organizational group name (optional)
         id: Unique identifier (auto-generated)
+        icon: Icon name from selfh.st (optional)
     """
 
     name: str
@@ -24,6 +25,7 @@ class SSHConnection:
     port: int = 22
     key_path: str | None = None
     group: str | None = "Default"
+    icon: str | None = None
     id: str = field(default_factory=lambda: __import__("uuid").uuid4().hex)
 
     def __post_init__(self):
@@ -50,6 +52,7 @@ class SSHConnection:
             "port": self.port,
             "key_path": self.key_path,
             "group": self.group,
+            "icon": self.icon,
         }
 
     @classmethod
@@ -67,6 +70,7 @@ class SSHConnection:
             port=data.get("port", 22),
             key_path=data.get("key_path"),
             group=data.get("group", "Default"),
+            icon=data.get("icon"),
         )
 
     def get_ssh_command(self) -> list[str]:

@@ -63,7 +63,9 @@ class TestMainWindow:
     def test_load_connections_with_data(self, window, temp_storage):
         """Test loading connections from storage."""
         # Add test connections
-        conn1 = SSHConnection(name="Server1", host="host1.com", user="user1", group="Work")
+        conn1 = SSHConnection(
+            name="Server1", host="host1.com", user="user1", group="Work", icon="proxmox"
+        )
         conn2 = SSHConnection(name="Server2", host="host2.com", user="user2", group="Work")
 
         temp_storage.add_connection(conn1)
@@ -191,6 +193,7 @@ class TestAddConnectionDialog:
         dialog.user_input.setText("testuser")
         dialog.port_input.setValue(2222)
         dialog.group_input.setCurrentText("Work")
+        dialog.icon_input.setText("home-assistant")
 
         conn = dialog.get_connection()
 
@@ -200,6 +203,7 @@ class TestAddConnectionDialog:
         assert conn.user == "testuser"
         assert conn.port == 2222
         assert conn.group == "Work"
+        assert conn.icon == "home-assistant"
 
     def test_get_connection_with_key(self, dialog):
         """Test getting connection with SSH key."""
@@ -252,6 +256,7 @@ class TestAddConnectionDialog:
             port=2222,
             key_path="~/.ssh/id_rsa",
             group="Work",
+            icon="proxmox",
         )
 
         dialog = AddConnectionDialog(connection=conn)
@@ -263,6 +268,7 @@ class TestAddConnectionDialog:
         assert dialog.user_input.text() == "testuser"
         assert dialog.port_input.value() == 2222
         assert dialog.group_input.currentText() == "Work"
+        assert dialog.icon_input.text() == "proxmox"
 
     def test_existing_groups_populated(self, qtbot: QtBot):
         """Test that existing groups are populated in dropdown."""
