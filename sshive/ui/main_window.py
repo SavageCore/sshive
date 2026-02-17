@@ -93,6 +93,13 @@ class MainWindow(QMainWindow):
         self.add_btn.clicked.connect(self._add_connection)
         button_layout.addWidget(self.add_btn)
 
+        clone_icon = qta.icon("fa5s.clone", color=self.icon_color)
+        self.clone_btn = QPushButton("Clone")
+        self.clone_btn.setIcon(clone_icon)
+        self.clone_btn.clicked.connect(self._clone_connection)
+        self.clone_btn.setEnabled(False)
+        button_layout.addWidget(self.clone_btn)
+
         edit_icon = qta.icon("fa5s.edit", color=self.icon_color)
         self.edit_btn = QPushButton("Edit")
         self.edit_btn.setIcon(edit_icon)
@@ -168,6 +175,7 @@ class MainWindow(QMainWindow):
         selected_items = self.tree.selectedItems()
 
         if not selected_items:
+            self.clone_btn.setEnabled(False)
             self.edit_btn.setEnabled(False)
             self.delete_btn.setEnabled(False)
             self.connect_btn.setEnabled(False)
@@ -178,6 +186,7 @@ class MainWindow(QMainWindow):
 
         # Enable buttons only if a connection is selected (not a group)
         is_connection = connection is not None
+        self.clone_btn.setEnabled(is_connection)
         self.edit_btn.setEnabled(is_connection)
         self.delete_btn.setEnabled(is_connection)
         self.connect_btn.setEnabled(is_connection)
@@ -190,6 +199,26 @@ class MainWindow(QMainWindow):
             connection = dialog.get_connection()
             if connection:
                 self.storage.add_connection(connection)
+                self._load_connections()
+
+    def _clone_connection(self):
+        """Show clone connection dialog for selected connection."""
+        selected_items = self.tree.selectedItems()
+        if not selected_items:
+            return
+
+        connection = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+        if not connection:
+            return
+
+        dialog = AddConnectionDialog(
+            self, connection=connection, existing_groups=self.storage.get_groups()
+        )
+
+        if dialog.exec():
+            updated_connection = dialog.get_connection()
+            if updated_connection:
+                self.storage.add_connection(updated_connection)
                 self._load_connections()
 
     def _edit_connection(self):
@@ -295,6 +324,9 @@ class MainWindow(QMainWindow):
         connect_action.triggered.connect(lambda: self._connect_to_server(item))
 
         menu.addSeparator()
+
+        clone_action = menu.addAction(qta.icon("fa5s.clone", color=self.icon_color), "Clone")
+        clone_action.triggered.connect(self._clone_connection)
 
         edit_action = menu.addAction(qta.icon("fa5s.edit", color=self.icon_color), "Edit")
         edit_action.triggered.connect(self._edit_connection)
