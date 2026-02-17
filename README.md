@@ -31,12 +31,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/SavageCore/sshive.git
 cd sshive
 
-# Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Install dependencies
+uv sync
 
-# Install the package in development mode
-uv pip install -e ".[dev]"
+# Run SSHive
+uv run sshive
 ```
 
 ### Using pip
@@ -52,15 +51,25 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install
 pip install -e ".[dev]"
+
+# Run
+sshive
 ```
 
 ## Running SSHive
 
-```bash
-# If installed
-sshive
+### With uv
 
-# Or run directly
+```bash
+uv run sshive
+```
+
+### With venv
+
+```bash
+source .venv/bin/activate
+sshive
+# or
 python -m sshive.main
 ```
 
@@ -70,7 +79,7 @@ python -m sshive.main
 
 ```bash
 # Install with dev dependencies
-uv pip install -e ".[dev]"
+uv sync
 
 # Or with pip
 pip install -e ".[dev]"
@@ -82,32 +91,61 @@ This project uses `ruff` for linting and formatting:
 
 ```bash
 # Check code quality
-ruff check .
+uv run ruff check .
 
 # Auto-fix issues
-ruff check --fix .
+uv run ruff check --fix .
 
 # Format code
-ruff format .
+uv run ruff format .
 
 # Run both (recommended before committing)
-ruff check --fix . && ruff format .
+uv run ruff check --fix . && uv run ruff format .
 ```
 
 ### Testing
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=sshive --cov-report=html
+uv run pytest --cov=sshive --cov-report=html
 
 # Run specific test file
-pytest tests/test_models.py
+uv run pytest tests/test_models.py
 
-# Run tests in watch mode (requires pytest-watch)
-ptw
+# Watch mode (requires pytest-watch)
+uv run ptw
+```
+
+### Using Makefile
+
+Common development tasks:
+
+```bash
+make help        # Show all commands
+make sync        # Install/sync dependencies
+make test        # Run tests
+make test-cov    # Run tests with coverage
+make lint        # Check code
+make format      # Format code
+make fix         # Fix all issues
+make run         # Run SSHive
+make clean       # Clean build artifacts
+```
+
+### Adding Dependencies
+
+```bash
+# Add a new package (updates pyproject.toml automatically)
+uv add package-name
+
+# Add a dev dependency
+uv add --dev package-name
+
+# Sync to install new dependencies
+uv sync
 ```
 
 ### Project Structure
@@ -117,6 +155,8 @@ sshive/
 ├── sshive/              # Main package
 │   ├── __init__.py
 │   ├── main.py          # Entry point
+│   ├── resources/       # Icons and assets
+│   │   └── icon.jpg
 │   ├── ui/              # UI components
 │   │   ├── main_window.py
 │   │   ├── add_dialog.py
@@ -132,6 +172,8 @@ sshive/
 │   ├── test_launcher.py
 │   └── test_ui.py
 ├── pyproject.toml       # Project configuration
+├── uv.lock             # Dependency lock file
+├── install_icon.sh      # Icon installation script
 └── README.md
 ```
 
@@ -139,7 +181,7 @@ sshive/
 
 ### Adding a Connection
 
-1. Click **"Add Connection"** button
+1. Click **"➕ Add Connection"** button
 2. Fill in the details:
    - **Name**: Friendly name (e.g., "Production Server")
    - **Host**: Hostname or IP
@@ -153,12 +195,13 @@ sshive/
 
 - **Double-click** any connection to launch your terminal and connect
 - Connections are organized by group (collapsible)
+- **Right-click** for context menu with options
 
 ### Terminal Support
 
 SSHive auto-detects your terminal emulator:
 
-- **Linux**: konsole, gnome-terminal, alacritty, kitty, xterm
+- **Linux**: konsole, gnome-terminal, alacritty, kitty, xterm, tilix, terminator
 - **macOS**: Terminal.app, iTerm2, Alacritty
 - **Windows**: Windows Terminal, WSL
 
@@ -173,8 +216,10 @@ Example configuration:
 
 ```json
 {
+  "version": "1.0",
   "connections": [
     {
+      "id": "abc123",
       "name": "Production Server",
       "host": "prod.example.com",
       "port": 22,
@@ -186,43 +231,160 @@ Example configuration:
 }
 ```
 
-## Building
+See `examples/connections.json` for more examples.
+
+## Building & Distribution
 
 ```bash
-# Build wheel
+# Build wheel package
 uv build
 
 # Install from wheel
+pip install dist/sshive-0.1.0-py3-none-any.whl
+
+# Or with uv
 uv pip install dist/sshive-0.1.0-py3-none-any.whl
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests and linting:
-   ```bash
-   ruff check --fix . && ruff format .
-   pytest
-   ```
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Start for Contributors
+
+```bash
+# Fork and clone
+git clone https://github.com/SavageCore/sshive.git
+cd sshive
+
+# Install dev dependencies
+uv sync
+
+# Make your changes
+
+# Run quality checks
+make fix      # Fix linting and formatting
+make test     # Ensure all tests pass
+
+# Commit and push
+git add .
+git commit -m "Add feature: description"
+git push origin feature-branch
+```
+
+## uv Workflow Reference
+
+```bash
+# Installation & Setup
+uv sync                          # Install all dependencies from lock file
+uv sync --all-extras            # Install with all optional dependencies
+
+# Running
+uv run sshive                   # Run the app (no venv activation needed!)
+uv run pytest                   # Run tests
+uv run ruff check .             # Lint code
+
+# Managing Dependencies
+uv add qtawesome                # Add package (updates pyproject.toml)
+uv add --dev pytest-watch       # Add dev dependency
+uv remove package-name          # Remove package
+uv lock                         # Update lock file
+uv lock --upgrade               # Upgrade all dependencies
+
+# Building
+uv build                        # Build distribution packages
+```
+
+## Why uv?
+
+- **Fast**: 10-100x faster than pip
+- **Modern**: Better dependency resolution with lock files
+- **Reliable**: Consistent installs across machines (via `uv.lock`)
+- **Simple**: No need to activate virtual environments with `uv run`
+- **Compatible**: Drop-in replacement for pip
+
+## Troubleshooting
+
+### Icon Not Showing in Taskbar
+
+Run the icon installation script:
+
+```bash
+./install_icon.sh
+```
+
+Then restart SSHive and/or KDE Plasma. See `ICON_INSTALLATION.md` for details.
+
+### Terminal Won't Launch
+
+**Issue:** "Failed to launch terminal"
+
+**Solution:** Install a supported terminal emulator:
+
+```bash
+# Ubuntu/Debian
+sudo apt install konsole
+
+# Fedora/RHEL
+sudo dnf install konsole
+
+# macOS (via Homebrew)
+brew install --cask iterm2
+```
+
+### Connection Fails
+
+**Issue:** "Cannot connect to server"
+
+**Check:**
+
+1. SSH is installed: `which ssh`
+2. Key file exists: `ls -la ~/.ssh/id_rsa`
+3. Can connect manually: `ssh user@host`
+4. Correct permissions on key: `chmod 600 ~/.ssh/id_rsa`
+
+### Package Not Found
+
+If you get "ModuleNotFoundError" after adding a package:
+
+```bash
+# Make sure to sync after editing pyproject.toml
+uv sync
+
+# Or if you used uv add, it should auto-sync
+uv add package-name
+```
+
+### Using Wrong Python
+
+```bash
+# Check which Python uv is using
+uv run python --version
+
+# Should match your system Python 3.10+
+```
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Roadmap
 
+- [x] Basic connection management
+- [x] SSH key support
+- [x] Dark/light mode
+- [x] Terminal auto-detection
+- [x] Beautiful icon
 - [ ] Import from PuTTY/KiTTY sessions
 - [ ] Export/backup connections
-- [ ] Connection search/filter
+- [ ] Search/filter connections
 - [ ] Recent connections history
 - [ ] Custom terminal command templates
 - [ ] Connection testing (ping/connectivity check)
-- [ ] Tunneling/port forwarding support
+- [ ] Port forwarding/tunneling support
+- [ ] Connection sharing between machines
+- [ ] Global keyboard shortcuts
+- [ ] System tray integration
 
 ## Acknowledgments
 
@@ -230,4 +392,16 @@ Built with:
 
 - [PySide6](https://wiki.qt.io/Qt_for_Python) - Qt for Python
 - [uv](https://github.com/astral-sh/uv) - Fast Python package installer
-- [ruff](https://github.com/astral-sh/ruff) - Fast Python linter
+- [ruff](https://github.com/astral-sh/ruff) - Fast Python linter & formatter
+- [QtAwesome](https://github.com/spyder-ide/qtawesome) - Icon fonts for Qt
+
+## Support
+
+- 📖 [Documentation](README.md)
+- 🚀 [Quick Start Guide](QUICKSTART.md)
+- 🐛 [Report Issues](https://github.com/SavageCore/sshive/issues)
+- 💬 [Discussions](https://github.com/SavageCore/sshive/discussions)
+
+---
+
+Made with 🐝 for SSH enthusiasts everywhere.

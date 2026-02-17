@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format clean run build
+.PHONY: help install dev test lint format clean run sync
 
 help:  ## Show this help message
 	@echo 'Usage: make [target]'
@@ -6,56 +6,55 @@ help:  ## Show this help message
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-install:  ## Install dependencies using uv
-	uv pip install -e .
+sync:  ## Sync dependencies from lock file
+	uv sync
 
-dev:  ## Install dependencies including dev tools
-	uv pip install -e ".[dev]"
+install:  ## Install dependencies
+	uv sync
+
+dev:  ## Install with dev dependencies
+	uv sync --all-extras
 
 test:  ## Run tests with pytest
-	pytest
+	uv run pytest
 
 test-cov:  ## Run tests with coverage report
-	pytest --cov=sshive --cov-report=html --cov-report=term-missing
+	uv run pytest --cov=sshive --cov-report=html --cov-report=term-missing
+
+test-watch:  ## Run tests in watch mode
+	uv run ptw .	
 
 lint:  ## Check code with ruff
-	ruff check .
+	uv run ruff check .
 
-lint-fix:  ## Auto-fix linting issues with ruff
-	ruff check --fix .
+lint-fix:  ## Auto-fix linting issues
+	uv run ruff check --fix .
 
 format:  ## Format code with ruff
-	ruff format .
+	uv run ruff format .
 
-format-check:  ## Check code formatting without making changes
-	ruff format --check .
+format-check:  ## Check formatting
+	uv run ruff format --check .
 
-check:  ## Run all checks (lint + format check)
-	ruff check .
-	ruff format --check .
+check:  ## Run all checks
+	uv run ruff check .
+	uv run ruff format --check .
 
-fix:  ## Fix all issues (lint fix + format)
-	ruff check --fix .
-	ruff format .
+fix:  ## Fix all issues
+	uv run ruff check --fix .
+	uv run ruff format .
 
-clean:  ## Clean build artifacts and cache
-	rm -rf build/
-	rm -rf dist/
-	rm -rf *.egg-info
-	rm -rf .pytest_cache/
-	rm -rf .ruff_cache/
-	rm -rf htmlcov/
-	rm -rf .coverage
+clean:  ## Clean build artifacts
+	rm -rf build/ dist/ *.egg-info .pytest_cache/ .ruff_cache/ htmlcov/ .coverage
 	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
 
 run:  ## Run SSHive
-	python -m sshive.main
+	uv run sshive
 
 build:  ## Build wheel package
 	uv build
 
-watch-test:  ## Run tests in watch mode (requires pytest-watch)
-	ptw
+lock:  ## Update lock file
+	uv lock
 
-all: clean lint-fix format test  ## Run complete workflow: clean, fix, format, test
+all: sync fix test  ## Complete workflow: sync, fix, test

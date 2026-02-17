@@ -41,7 +41,7 @@ class TestMainWindow:
 
     def test_window_initialization(self, window):
         """Test that window initializes correctly."""
-        assert window.windowTitle() == "SSHive 🐝 - SSH Connection Manager"
+        assert window.windowTitle() == "SSHive - SSH Connection Manager"
         assert window.tree is not None
         assert window.add_btn is not None
         assert window.edit_btn is not None

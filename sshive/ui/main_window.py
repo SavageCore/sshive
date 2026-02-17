@@ -1,5 +1,6 @@
 """Main application window."""
 
+import qtawesome as qta
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -19,6 +20,7 @@ from sshive.models.connection import SSHConnection
 from sshive.models.storage import ConnectionStorage
 from sshive.ssh.launcher import SSHLauncher
 from sshive.ui.add_dialog import AddConnectionDialog
+from sshive.ui.theme import ThemeManager
 
 
 class MainWindow(QMainWindow):
@@ -30,6 +32,9 @@ class MainWindow(QMainWindow):
 
         self.storage = ConnectionStorage()
         self.connections: list[SSHConnection] = []
+
+        # Determine icon color based on theme
+        self.icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
 
         self._setup_ui()
         self._load_connections()
@@ -53,14 +58,17 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
 
         # Add connection action
-        add_action = QAction("➕ Add Connection", self)
+        add_icon = qta.icon("fa5s.plus", color=self.icon_color)
+
+        add_action = QAction(add_icon, "Add Connection", self)
         add_action.triggered.connect(self._add_connection)
         toolbar.addAction(add_action)
 
         toolbar.addSeparator()
 
         # Refresh action
-        refresh_action = QAction("🔄 Refresh", self)
+        refresh_icon = qta.icon("fa5s.sync-alt", color=self.icon_color)
+        refresh_action = QAction(refresh_icon, "Refresh", self)
         refresh_action.triggered.connect(self._load_connections)
         toolbar.addAction(refresh_action)
 
@@ -80,23 +88,30 @@ class MainWindow(QMainWindow):
         # Bottom buttons
         button_layout = QHBoxLayout()
 
-        self.add_btn = QPushButton("➕ Add Connection")
+        self.add_btn = QPushButton("Add Connection")
+        self.add_btn.setIcon(add_icon)
         self.add_btn.clicked.connect(self._add_connection)
         button_layout.addWidget(self.add_btn)
 
-        self.edit_btn = QPushButton("✏️ Edit")
+        edit_icon = qta.icon("fa5s.edit", color=self.icon_color)
+        self.edit_btn = QPushButton("Edit")
+        self.edit_btn.setIcon(edit_icon)
         self.edit_btn.clicked.connect(self._edit_connection)
         self.edit_btn.setEnabled(False)
         button_layout.addWidget(self.edit_btn)
 
-        self.delete_btn = QPushButton("🗑️ Delete")
+        delete_icon = qta.icon("fa5s.trash", color=self.icon_color)
+        self.delete_btn = QPushButton("Delete")
+        self.delete_btn.setIcon(delete_icon)
         self.delete_btn.clicked.connect(self._delete_connection)
         self.delete_btn.setEnabled(False)
         button_layout.addWidget(self.delete_btn)
 
         button_layout.addStretch()
 
-        self.connect_btn = QPushButton("🚀 Connect")
+        connect_icon = qta.icon("fa5s.rocket", color=self.icon_color)
+        self.connect_btn = QPushButton("Connect")
+        self.connect_btn.setIcon(connect_icon)
         self.connect_btn.clicked.connect(lambda: self._connect_to_server(None))
         self.connect_btn.setEnabled(False)
         self.connect_btn.setDefault(True)
@@ -124,11 +139,15 @@ class MainWindow(QMainWindow):
                 groups[group_name] = []
             groups[group_name].append(conn)
 
+        # Define icons for tree
+        folder_icon = qta.icon("fa5s.folder", color=self.icon_color)
+
         # Create tree structure
         for group_name in sorted(groups.keys()):
             # Group item
             group_item = QTreeWidgetItem(self.tree)
-            group_item.setText(0, f"📁 {group_name}")
+            group_item.setText(0, f"{group_name}")
+            group_item.setIcon(0, folder_icon)
             group_item.setExpanded(True)
             group_item.setData(0, Qt.ItemDataRole.UserRole, None)  # No connection data
 
@@ -272,15 +291,15 @@ class MainWindow(QMainWindow):
 
         menu = QMenu()
 
-        connect_action = menu.addAction("🚀 Connect")
+        connect_action = menu.addAction(qta.icon("fa5s.rocket", color=self.icon_color), "Connect")
         connect_action.triggered.connect(lambda: self._connect_to_server(item))
 
         menu.addSeparator()
 
-        edit_action = menu.addAction("✏️ Edit")
+        edit_action = menu.addAction(qta.icon("fa5s.edit", color=self.icon_color), "Edit")
         edit_action.triggered.connect(self._edit_connection)
 
-        delete_action = menu.addAction("🗑️ Delete")
+        delete_action = menu.addAction(qta.icon("fa5s.trash", color=self.icon_color), "Delete")
         delete_action.triggered.connect(self._delete_connection)
 
         menu.exec(self.tree.viewport().mapToGlobal(position))

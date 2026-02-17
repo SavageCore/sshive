@@ -15,15 +15,17 @@ class TestConnectionStorage:
 
     @pytest.fixture
     def temp_config(self):
-        """Create temporary config file for testing."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-            temp_path = Path(f.name)
+        """Create temporary config file path for testing."""
+        # Don't create the file - just get a path
+        temp_dir = tempfile.mkdtemp()
+        temp_path = Path(temp_dir) / "test_config.json"
 
         yield temp_path
 
         # Cleanup
         if temp_path.exists():
             temp_path.unlink()
+        temp_path.parent.rmdir()
 
     @pytest.fixture
     def storage(self, temp_config):
@@ -136,14 +138,15 @@ class TestConnectionStorage:
         # Should return empty list rather than crash
         assert loaded == []
 
-    def test_connection_persistence(self, storage):
+    def test_connection_persistence(self, temp_config):
         """Test that connections persist across storage instances."""
         # Create connection with first instance
+        storage1 = ConnectionStorage(temp_config)
         conn = SSHConnection(name="Persistent", host="example.com", user="testuser")
-        storage.add_connection(conn)
+        storage1.add_connection(conn)
 
         # Create new storage instance pointing to same file
-        storage2 = ConnectionStorage(storage.config_file)
+        storage2 = ConnectionStorage(temp_config)
         loaded = storage2.load_connections()
 
         assert len(loaded) == 1

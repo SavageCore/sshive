@@ -2,13 +2,12 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
 class SSHConnection:
     """Represents a single SSH connection configuration.
-    
+
     Attributes:
         name: Display name for the connection
         host: Hostname or IP address
@@ -23,8 +22,8 @@ class SSHConnection:
     host: str
     user: str
     port: int = 22
-    key_path: Optional[str] = None
-    group: Optional[str] = "Default"
+    key_path: str | None = None
+    group: str | None = "Default"
     id: str = field(default_factory=lambda: __import__("uuid").uuid4().hex)
 
     def __post_init__(self):
@@ -68,20 +67,20 @@ class SSHConnection:
 
     def get_ssh_command(self) -> list[str]:
         """Generate SSH command arguments.
-        
+
         Returns:
             List of command arguments suitable for subprocess
         """
         cmd = ["ssh"]
-        
+
         if self.key_path:
             cmd.extend(["-i", self.key_path])
-        
+
         if self.port != 22:
             cmd.extend(["-p", str(self.port)])
-        
+
         cmd.append(f"{self.user}@{self.host}")
-        
+
         return cmd
 
     def __str__(self) -> str:
