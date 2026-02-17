@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
         edit_icon = qta.icon("fa5s.edit", color=self.icon_color)
         self.edit_btn = QPushButton("Edit")
         self.edit_btn.setIcon(edit_icon)
-        self.edit_btn.clicked.connect(self._edit_connection)
+        self.edit_btn.clicked.connect(lambda: self._edit_connection())
         self.edit_btn.setEnabled(False)
         button_layout.addWidget(self.edit_btn)
 
@@ -148,37 +148,44 @@ class MainWindow(QMainWindow):
 
         # Define icons for tree
         folder_icon = qta.icon("fa5s.folder", color=self.icon_color)
+        server_icon = qta.icon("fa5s.server", color=self.icon_color)
 
-        # Create tree structure
+        # Map path -> QTreeWidgetItem
+        group_items: dict[str, QTreeWidgetItem] = {}
+
         for group_name in sorted(groups.keys()):
-            # Group item
-            if "/" not in group_name:
-                group_item = QTreeWidgetItem(self.tree)
-                group_item.setText(0, f"{group_name}")
-                group_item.setIcon(0, folder_icon)
-                group_item.setExpanded(True)
-                group_item.setData(0, Qt.ItemDataRole.UserRole, None)  # No connection data
+            parts = group_name.split("/")
+            parent = self.tree
+            current_path = ""
 
-            # If group includes a "/" create a sub group
-            if "/" in group_name:
-                sub_group_name = group_name.split("/")[-1]
-                sub_group_item = QTreeWidgetItem(group_item)
-                sub_group_item.setText(0, sub_group_name)
-                sub_group_item.setIcon(0, folder_icon)
-                sub_group_item.setExpanded(True)
-                sub_group_item.setData(0, Qt.ItemDataRole.UserRole, None)  # No connection data
-                group_item = sub_group_item
+            for part in parts:
+                prev_path = current_path
+                current_path = f"{current_path}/{part}" if current_path else part
 
-            # Add connections to group
+                if current_path not in group_items:
+                    # Create item
+                    if prev_path:
+                        parent = group_items[prev_path]
+                    else:
+                        parent = self.tree
+
+                    item = QTreeWidgetItem(parent)
+                    item.setText(0, part)
+                    item.setIcon(0, folder_icon)
+                    item.setExpanded(True)
+                    item.setData(0, Qt.ItemDataRole.UserRole, None)
+                    group_items[current_path] = item
+
+            # Add connections to this group
+            group_item = group_items[group_name]
             for conn in sorted(groups[group_name], key=lambda c: c.name):
                 conn_item = QTreeWidgetItem(group_item)
                 conn_item.setText(0, conn.name)
                 conn_item.setText(1, conn.host)
                 conn_item.setText(2, conn.user)
                 conn_item.setText(3, str(conn.port))
+                conn_item.setIcon(0, server_icon)
                 conn_item.setData(0, Qt.ItemDataRole.UserRole, conn)
-
-                # Add tooltip
                 conn_item.setToolTip(0, str(conn))
 
     def _on_selection_changed(self):
@@ -212,33 +219,59 @@ class MainWindow(QMainWindow):
                 self.storage.add_connection(connection)
                 self._load_connections()
 
-    def _clone_connection(self):
-        """Show clone connection dialog for selected connection."""
-        selected_items = self.tree.selectedItems()
-        if not selected_items:
-            return
+    def _clone_connection(self, item: QTreeWidgetItem | None = None):
+        """Show clone connection dialog for selected connection.
 
-        connection = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+        Args:
+            item: Tree item to clone (optional, uses selection if None)
+        """
+        if not item:
+            selected_items = self.tree.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        connection = item.data(0, Qt.ItemDataRole.UserRole)
         if not connection:
             return
 
+        # Create a new connection based on the existing one with a fresh ID
+        # This prevents duplicate IDs in the storage
+        import uuid
+
+        new_connection = SSHConnection(
+            name=f"{connection.name} (Copy)",
+            host=connection.host,
+            user=connection.user,
+            port=connection.port,
+            key_path=connection.key_path,
+            group=connection.group,
+            id=uuid.uuid4().hex,
+        )
+
         dialog = AddConnectionDialog(
-            self, connection=connection, existing_groups=self.storage.get_groups()
+            self, connection=new_connection, existing_groups=self.storage.get_groups()
         )
 
         if dialog.exec():
-            updated_connection = dialog.get_connection()
-            if updated_connection:
-                self.storage.add_connection(updated_connection)
+            cloned_connection = dialog.get_connection()
+            if cloned_connection:
+                self.storage.add_connection(cloned_connection)
                 self._load_connections()
 
-    def _edit_connection(self):
-        """Show edit connection dialog for selected connection."""
-        selected_items = self.tree.selectedItems()
-        if not selected_items:
-            return
+    def _edit_connection(self, item: QTreeWidgetItem | None = None):
+        """Show edit connection dialog for selected connection.
 
-        connection = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+        Args:
+            item: Tree item to edit (optional, uses selection if None)
+        """
+        if not item:
+            selected_items = self.tree.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        connection = item.data(0, Qt.ItemDataRole.UserRole)
         if not connection:
             return
 
@@ -252,13 +285,19 @@ class MainWindow(QMainWindow):
                 self.storage.update_connection(updated_connection)
                 self._load_connections()
 
-    def _delete_connection(self):
-        """Delete selected connection after confirmation."""
-        selected_items = self.tree.selectedItems()
-        if not selected_items:
-            return
+    def _delete_connection(self, item: QTreeWidgetItem | None = None):
+        """Delete selected connection after confirmation.
 
-        connection = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+        Args:
+            item: Tree item to delete (optional, uses selection if None)
+        """
+        if not item:
+            selected_items = self.tree.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        connection = item.data(0, Qt.ItemDataRole.UserRole)
         if not connection:
             return
 
@@ -337,12 +376,12 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
 
         clone_action = menu.addAction(qta.icon("fa5s.clone", color=self.icon_color), "Clone")
-        clone_action.triggered.connect(self._clone_connection)
+        clone_action.triggered.connect(lambda: self._clone_connection(item))
 
         edit_action = menu.addAction(qta.icon("fa5s.edit", color=self.icon_color), "Edit")
-        edit_action.triggered.connect(self._edit_connection)
+        edit_action.triggered.connect(lambda: self._edit_connection(item))
 
         delete_action = menu.addAction(qta.icon("fa5s.trash", color=self.icon_color), "Delete")
-        delete_action.triggered.connect(self._delete_connection)
+        delete_action.triggered.connect(lambda: self._delete_connection(item))
 
         menu.exec(self.tree.viewport().mapToGlobal(position))

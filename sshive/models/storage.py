@@ -50,9 +50,20 @@ class ConnectionStorage:
             with open(self.config_file, encoding="utf-8") as f:
                 data = json.load(f)
 
-            connections = [
-                SSHConnection.from_dict(conn_data) for conn_data in data.get("connections", [])
-            ]
+            raw_connections = data.get("connections", [])
+            needs_migration = False
+
+            # Check if migration is needed (missing IDs)
+            for conn_data in raw_connections:
+                if not conn_data.get("id"):
+                    needs_migration = True
+                    break
+
+            connections = [SSHConnection.from_dict(conn_data) for conn_data in raw_connections]
+
+            if needs_migration:
+                self.save_connections(connections)
+
             return connections
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -81,18 +92,23 @@ class ConnectionStorage:
         self.save_connections(connections)
 
     def update_connection(self, connection: SSHConnection) -> None:
-        """Update an existing connection.
+        """Update an existing connection or add if not found.
 
         Args:
             connection: SSHConnection with updated data
         """
         connections = self.load_connections()
+        found = False
 
         # Find and replace connection with matching ID
         for i, conn in enumerate(connections):
             if conn.id == connection.id:
                 connections[i] = connection
+                found = True
                 break
+
+        if not found:
+            connections.append(connection)
 
         self.save_connections(connections)
 

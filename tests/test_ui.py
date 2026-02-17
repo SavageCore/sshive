@@ -111,6 +111,50 @@ class TestMainWindow:
         assert window.delete_btn.isEnabled() is False
         assert window.connect_btn.isEnabled() is False
 
+    def test_cloning_generates_unique_id(self, window, temp_storage, qtbot: QtBot, monkeypatch):
+        """Test that cloning a connection generates a new unique ID."""
+        # Add connection
+        conn = SSHConnection(name="Original", host="example.com", user="testuser")
+        temp_storage.add_connection(conn)
+        window._load_connections()
+
+        # Select the connection
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+        window.tree.setCurrentItem(conn_item)
+
+        # Mock AddConnectionDialog to automatically "accept" and return the cloned connection
+        # we capture the connection object created in _clone_connection
+        cloned_conn_captured = [None]
+
+        class MockDialog:
+            def __init__(self, parent=None, connection=None, existing_groups=None):
+                cloned_conn_captured[0] = connection
+
+            def exec(self):
+                return True
+
+            def get_connection(self):
+                return cloned_conn_captured[0]
+
+        monkeypatch.setattr("sshive.ui.main_window.AddConnectionDialog", MockDialog)
+
+        # Trigger clone
+        window._clone_connection()
+
+        # Check results
+        assert cloned_conn_captured[0] is not None
+        assert cloned_conn_captured[0].id != conn.id
+        assert cloned_conn_captured[0].name == "Original (Copy)"
+
+        # Verify both are in storage
+        all_conns = temp_storage.load_connections()
+        assert len(all_conns) == 2
+        ids = [c.id for c in all_conns]
+        assert conn.id in ids
+        assert cloned_conn_captured[0].id in ids
+        assert len(set(ids)) == 2
+
 
 class TestAddConnectionDialog:
     """Test cases for AddConnectionDialog."""

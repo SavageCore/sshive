@@ -55,8 +55,12 @@ class SSHConnection:
     @classmethod
     def from_dict(cls, data: dict) -> "SSHConnection":
         """Create connection from dictionary."""
+        # Ensure ID exists (for backward compatibility)
+        if not data.get("id"):
+            data["id"] = __import__("uuid").uuid4().hex
+
         return cls(
-            id=data.get("id", ""),
+            id=data["id"],
             name=data["name"],
             host=data["host"],
             user=data["user"],

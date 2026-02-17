@@ -162,9 +162,8 @@ class AddConnectionDialog(QDialog):
         group = self.group_input.currentText().strip() or "Default"
 
         try:
-            # Create new connection or update existing
             if self.connection:
-                # Update existing connection
+                # Update the existing object
                 self.connection.name = name
                 self.connection.host = host
                 self.connection.user = user
