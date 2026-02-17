@@ -1,7 +1,7 @@
 """Main application window."""
 
 import qtawesome as qta
-from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
-    QToolBar,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QTreeWidgetItemIterator,
@@ -70,27 +70,27 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         central_widget.setLayout(layout)
 
-        # Toolbar
-        toolbar = QToolBar()
-        toolbar.setObjectName("mainToolbar")
-        toolbar.setMovable(False)
-        toolbar.setIconSize(QSize(24, 24))
-        self.addToolBar(toolbar)
+        # Top options layout
+        top_layout = QHBoxLayout()
+        top_layout.addStretch()
 
-        # Add connection action
+        # View options (eye menu)
+        view_icon = qta.icon("fa5s.eye", color=self.icon_color)
+        self.view_btn = QToolButton()
+        self.view_btn.setIcon(view_icon)
+        self.view_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.view_btn.setToolTip("Column Visibility")
+        self.view_btn.setStyleSheet("border: none; padding: 4px;")
+
+        self.view_menu = QMenu(self.view_btn)
+        self.view_btn.setMenu(self.view_menu)
+        self.view_menu.aboutToShow.connect(self._populate_view_menu)
+
+        top_layout.addWidget(self.view_btn)
+        layout.addLayout(top_layout)
+
+        # Icons for later use
         add_icon = qta.icon("fa5s.plus", color=self.icon_color)
-
-        add_action = QAction(add_icon, "Add Connection", self)
-        add_action.triggered.connect(self._add_connection)
-        toolbar.addAction(add_action)
-
-        toolbar.addSeparator()
-
-        # Refresh action
-        refresh_icon = qta.icon("fa5s.sync-alt", color=self.icon_color)
-        refresh_action = QAction(refresh_icon, "Refresh", self)
-        refresh_action.triggered.connect(self._load_connections)
-        toolbar.addAction(refresh_action)
 
         # Connection tree
         self.tree = QTreeWidget()
@@ -102,6 +102,11 @@ class MainWindow(QMainWindow):
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
         self.tree.itemDoubleClicked.connect(self._connect_to_server)
+
+        # Header context menu
+        header = self.tree.header()
+        header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._show_header_context_menu)
 
         layout.addWidget(self.tree)
 
@@ -436,3 +441,37 @@ class MainWindow(QMainWindow):
         delete_action.triggered.connect(lambda: self._delete_connection(item))
 
         menu.exec(self.tree.viewport().mapToGlobal(position))
+
+    def _show_header_context_menu(self, position):
+        """Show context menu for tree header to hide columns.
+
+        Args:
+            position: Position where right-click occurred
+        """
+        column = self.tree.header().logicalIndexAt(position)
+        if column <= 0:  # Don't hide the "Name" column
+            return
+
+        menu = QMenu()
+        column_name = self.tree.headerItem().text(column)
+        hide_action = menu.addAction(f"Hide {column_name}")
+        hide_action.triggered.connect(lambda: self.tree.setColumnHidden(column, True))
+
+        menu.exec(self.tree.header().mapToGlobal(position))
+
+    def _populate_view_menu(self):
+        """Populate the view options menu with column toggles."""
+        self.view_menu.clear()
+
+        header = self.tree.header()
+        header_item = self.tree.headerItem()
+
+        for i in range(1, self.tree.columnCount()):
+            name = header_item.text(i)
+            action = QAction(name, self.view_menu)
+            action.setCheckable(True)
+            action.setChecked(not self.tree.isColumnHidden(i))
+            action.triggered.connect(
+                lambda checked, idx=i: self.tree.setColumnHidden(idx, not checked)
+            )
+            self.view_menu.addAction(action)
