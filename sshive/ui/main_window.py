@@ -2,7 +2,7 @@
 
 import qtawesome as qta
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
@@ -12,14 +12,17 @@ from PySide6.QtWidgets import (
     QToolBar,
     QTreeWidget,
     QTreeWidgetItem,
+    QTreeWidgetItemIterator,
     QVBoxLayout,
     QWidget,
 )
+from pathlib import Path
 
 from sshive.models.connection import SSHConnection
 from sshive.models.storage import ConnectionStorage
 from sshive.ssh.launcher import SSHLauncher
 from sshive.ui.add_dialog import AddConnectionDialog
+from sshive.ui.icon_manager import IconManager
 from sshive.ui.theme import ThemeManager
 
 
@@ -37,6 +40,10 @@ class MainWindow(QMainWindow):
         self.icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
 
         self._setup_ui()
+
+        self.icon_manager = IconManager.instance()
+        self.icon_manager.icon_loaded.connect(self._on_icon_loaded)
+
         self._load_connections()
 
         self.setWindowTitle("SSHive - SSH Connection Manager")
@@ -139,21 +146,21 @@ class MainWindow(QMainWindow):
         self.tree.clear()
 
         # Group connections by group name
-        groups: dict[str, list[SSHConnection]] = {}
+        grouped_conns: dict[str, list[SSHConnection]] = {}
         for conn in self.connections:
             group_name = conn.group or "Default"
-            if group_name not in groups:
-                groups[group_name] = []
-            groups[group_name].append(conn)
+            if group_name not in grouped_conns:
+                grouped_conns[group_name] = []
+            grouped_conns[group_name].append(conn)
 
-        # Define icons for tree
+        # Define standard icons
         folder_icon = qta.icon("fa5s.folder", color=self.icon_color)
         server_icon = qta.icon("fa5s.server", color=self.icon_color)
 
         # Map path -> QTreeWidgetItem
         group_items: dict[str, QTreeWidgetItem] = {}
 
-        for group_name in sorted(groups.keys()):
+        for group_name in sorted(grouped_conns.keys()):
             parts = group_name.split("/")
             parent = self.tree
             current_path = ""
@@ -164,12 +171,9 @@ class MainWindow(QMainWindow):
 
                 if current_path not in group_items:
                     # Create item
-                    if prev_path:
-                        parent = group_items[prev_path]
-                    else:
-                        parent = self.tree
+                    parent_item = group_items[prev_path] if prev_path else self.tree
 
-                    item = QTreeWidgetItem(parent)
+                    item = QTreeWidgetItem(parent_item)
                     item.setText(0, part)
                     item.setIcon(0, folder_icon)
                     item.setExpanded(True)
@@ -178,15 +182,35 @@ class MainWindow(QMainWindow):
 
             # Add connections to this group
             group_item = group_items[group_name]
-            for conn in sorted(groups[group_name], key=lambda c: c.name):
+            for conn in sorted(grouped_conns[group_name], key=lambda c: c.name):
                 conn_item = QTreeWidgetItem(group_item)
                 conn_item.setText(0, conn.name)
                 conn_item.setText(1, conn.host)
                 conn_item.setText(2, conn.user)
                 conn_item.setText(3, str(conn.port))
-                conn_item.setIcon(0, server_icon)
+
+                # Set icon
+                if conn.icon:
+                    icon = self.icon_manager.get_icon(conn.icon)
+                    if icon:
+                        conn_item.setIcon(0, icon)
+                    else:
+                        conn_item.setIcon(0, server_icon)
+                else:
+                    conn_item.setIcon(0, server_icon)
+
                 conn_item.setData(0, Qt.ItemDataRole.UserRole, conn)
                 conn_item.setToolTip(0, str(conn))
+
+    def _on_icon_loaded(self, name: str, path: str):
+        """Handle icon loaded signal and update tree items."""
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            item = it.value()
+            conn = item.data(0, Qt.ItemDataRole.UserRole)
+            if conn and conn.icon == name:
+                item.setIcon(0, QIcon(path))
+            it += 1
 
     def _on_selection_changed(self):
         """Handle tree selection changes."""
