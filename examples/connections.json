@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "connections": [
+    {
+      "id": "abc123",
+      "name": "Production Server",
+      "host": "prod.example.com",
+      "user": "deploy",
+      "port": 22,
+      "key_path": "~/.ssh/id_rsa",
+      "group": "Work"
+    },
+    {
+      "id": "def456",
+      "name": "Development VM",
+      "host": "192.168.1.100",
+      "user": "developer",
+      "port": 22,
+      "key_path": "~/.ssh/dev_key",
+      "group": "Development"
+    },
+    {
+      "id": "ghi789",
+      "name": "Personal VPS",
+      "host": "vps.mysite.com",
+      "user": "root",
+      "port": 2222,
+      "key_path": "~/.ssh/personal_key",
+      "group": "Personal"
+    },
+    {
+      "id": "jkl012",
+      "name": "Database Server",
+      "host": "db.example.com",
+      "user": "admin",
+      "port": 22,
+      "key_path": null,
+      "group": "Work"
+    }
+  ]
+}
