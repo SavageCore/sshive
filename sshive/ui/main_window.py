@@ -152,11 +152,22 @@ class MainWindow(QMainWindow):
         # Create tree structure
         for group_name in sorted(groups.keys()):
             # Group item
-            group_item = QTreeWidgetItem(self.tree)
-            group_item.setText(0, f"{group_name}")
-            group_item.setIcon(0, folder_icon)
-            group_item.setExpanded(True)
-            group_item.setData(0, Qt.ItemDataRole.UserRole, None)  # No connection data
+            if "/" not in group_name:
+                group_item = QTreeWidgetItem(self.tree)
+                group_item.setText(0, f"{group_name}")
+                group_item.setIcon(0, folder_icon)
+                group_item.setExpanded(True)
+                group_item.setData(0, Qt.ItemDataRole.UserRole, None)  # No connection data
+
+            # If group includes a "/" create a sub group
+            if "/" in group_name:
+                sub_group_name = group_name.split("/")[-1]
+                sub_group_item = QTreeWidgetItem(group_item)
+                sub_group_item.setText(0, sub_group_name)
+                sub_group_item.setIcon(0, folder_icon)
+                sub_group_item.setExpanded(True)
+                sub_group_item.setData(0, Qt.ItemDataRole.UserRole, None)  # No connection data
+                group_item = sub_group_item
 
             # Add connections to group
             for conn in sorted(groups[group_name], key=lambda c: c.name):
