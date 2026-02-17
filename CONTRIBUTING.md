@@ -60,8 +60,11 @@ make test
 # Run tests with coverage
 make test-cov
 
-# Watch mode during development (requires pytest-watch)
-make watch-test
+# Watch mode during development (requires pytest-watcher)
+make test-watch
+
+# Watch mode for application
+make watch
 ```
 
 ### Makefile Commands

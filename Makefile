@@ -21,8 +21,13 @@ test:  ## Run tests with pytest
 test-cov:  ## Run tests with coverage report
 	uv run pytest --cov=sshive --cov-report=html --cov-report=term-missing
 
+
 test-watch:  ## Run tests in watch mode
-	uv run ptw .	
+	uv run ptw .
+
+watch:  ## Run application in watch mode
+	uv run python scripts/dev_watch.py
+
 
 lint:  ## Check code with ruff
 	uv run ruff check .
