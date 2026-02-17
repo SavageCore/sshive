@@ -1,7 +1,3 @@
-import pytest
-from PySide6.QtCore import QUrl
-from PySide6.QtNetwork import QNetworkAccessManager
-
 from sshive.ui.icon_manager import IconManager, get_icon_manager
 
 

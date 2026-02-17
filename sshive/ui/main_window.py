@@ -1,8 +1,8 @@
 """Main application window."""
 
 import qtawesome as qta
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction, QIcon, QPixmap
+from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from pathlib import Path
 
 from sshive.models.connection import SSHConnection
 from sshive.models.storage import ConnectionStorage
@@ -47,7 +46,20 @@ class MainWindow(QMainWindow):
         self._load_connections()
 
         self.setWindowTitle("SSHive - SSH Connection Manager")
-        self.resize(800, 600)
+
+        # Restore window state and geometry
+        self.settings = QSettings("SSHive", "SSHive")
+
+        # Note: on Wayland, restoreGeometry will typically only restore the window size,
+        # as the compositor restricts applications from setting their own position.
+        if not self.restoreGeometry(self.settings.value("geometry", b"")):
+            self.resize(800, 600)
+
+        self.restoreState(self.settings.value("windowState", b""))
+
+        header_state = self.settings.value("columnState")
+        if header_state:
+            self.tree.header().restoreState(header_state)
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -60,6 +72,7 @@ class MainWindow(QMainWindow):
 
         # Toolbar
         toolbar = QToolBar()
+        toolbar.setObjectName("mainToolbar")
         toolbar.setMovable(False)
         toolbar.setIconSize(QSize(24, 24))
         self.addToolBar(toolbar)
@@ -135,6 +148,20 @@ class MainWindow(QMainWindow):
 
         # Connect selection change
         self.tree.itemSelectionChanged.connect(self._on_selection_changed)
+
+        # Enable column reordering
+        self.tree.header().setSectionsMovable(True)
+
+    def closeEvent(self, event):
+        """Handle window close event to save settings."""
+        self._save_settings()
+        super().closeEvent(event)
+
+    def _save_settings(self):
+        """Save window state and geometry."""
+        self.settings.setValue("geometry", self.saveGeometry())
+        self.settings.setValue("windowState", self.saveState())
+        self.settings.setValue("columnState", self.tree.header().saveState())
 
     def _load_connections(self):
         """Load connections from storage and populate tree."""

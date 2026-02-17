@@ -3,6 +3,7 @@
 Main entry point for the application.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -21,6 +22,11 @@ def get_resource_path(filename: str) -> str:
 
 def main():
     """Main application entry point."""
+    # Force X11 backend (XWayland) on Wayland systems to allow
+    # window position restoration which is otherwise restricted.
+    if os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
     app = QApplication(sys.argv)
 
     # Set application metadata
