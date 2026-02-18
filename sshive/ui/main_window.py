@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SSHive - SSH Connection Manager")
 
         # Restore window state and geometry
-        self.settings = QSettings("SSHive", "SSHive")
+        self.settings = QSettings("sshive", "sshive")
 
         # Note: on Wayland, restoreGeometry will typically only restore the window size,
         # as the compositor restricts applications from setting their own position.
