@@ -194,7 +194,6 @@ class MainWindow(QMainWindow):
 
         for group_name in sorted(grouped_conns.keys()):
             parts = group_name.split("/")
-            parent = self.tree
             current_path = ""
 
             for part in parts:
@@ -463,7 +462,6 @@ class MainWindow(QMainWindow):
         """Populate the view options menu with column toggles."""
         self.view_menu.clear()
 
-        header = self.tree.header()
         header_item = self.tree.headerItem()
 
         for i in range(1, self.tree.columnCount()):

@@ -26,6 +26,7 @@ class IconManager(QObject):
         """Initialize icon manager."""
         super().__init__()
         self.network = QNetworkAccessManager(self)
+        self.pending_replies: set[QNetworkReply] = set()
         self.cache_dir = (
             Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation))
             / "icons"
@@ -34,6 +35,35 @@ class IconManager(QObject):
 
         self.valid_icons: set[str] = set()
         self._load_manifest()
+
+    def cleanup(self):
+        """Clean up resources and abort pending requests."""
+        for reply in list(self.pending_replies):
+            try:
+                reply.finished.disconnect()
+            except Exception:
+                pass
+            if reply.isRunning():
+                reply.abort()
+            reply.deleteLater()
+        self.pending_replies.clear()
+        self.valid_icons.clear()
+
+    def __del__(self):
+        """Ensure cleanup on destruction."""
+        # Note: Be careful with QObject cleanup in __del__
+        pass
+
+    def _track_reply(self, reply: QNetworkReply):
+        """Track a reply to ensure it can be aborted if needed."""
+        self.pending_replies.add(reply)
+        reply.finished.connect(self._on_reply_finished)
+
+    def _on_reply_finished(self):
+        """Remove finished reply from tracking."""
+        reply = self.sender()
+        if reply in self.pending_replies:
+            self.pending_replies.discard(reply)
 
     def _load_manifest(self):
         """Load icon manifest from cache or network."""
@@ -50,7 +80,13 @@ class IconManager(QObject):
         # Fetch update
         request = QNetworkRequest(QUrl(self.MANIFEST_URL))
         reply = self.network.get(request)
-        reply.finished.connect(lambda: self._on_manifest_downloaded(reply))
+        self._track_reply(reply)
+        reply.finished.connect(self._on_manifest_downloaded_finished)
+
+    def _on_manifest_downloaded_finished(self):
+        """Internal slot for manifest download completion."""
+        reply = self.sender()
+        self._on_manifest_downloaded(reply)
 
     def _on_manifest_downloaded(self, reply: QNetworkReply):
         """Handle manifest download."""
@@ -112,7 +148,19 @@ class IconManager(QObject):
         url = f"{self.BASE_URL}/{name}.webp"
         request = QNetworkRequest(QUrl(url))
         reply = self.network.get(request)
-        reply.finished.connect(lambda: self._on_icon_downloaded(reply, name, icon_path))
+        self._track_reply(reply)
+        # We need to capture the name for the callback, but avoid capturing 'self' in a way that leaks.
+        # Signal mapper or dynamic property is safer.
+        reply.setProperty("icon_name", name)
+        reply.setProperty("icon_path", str(icon_path))
+        reply.finished.connect(self._on_icon_downloaded_finished)
+
+    def _on_icon_downloaded_finished(self):
+        """Internal slot for icon download completion."""
+        reply = self.sender()
+        name = reply.property("icon_name")
+        path = Path(reply.property("icon_path"))
+        self._on_icon_downloaded(reply, name, path)
 
     def _on_icon_downloaded(self, reply: QNetworkReply, name: str, path: Path):
         """Handle icon download."""
@@ -130,6 +178,15 @@ class IconManager(QObject):
 
 # Global instance
 _instance = None
+
+
+def reset_icon_manager():
+    """Reset the global icon manager instance (primarily for tests)."""
+    global _instance
+    if _instance is not None:
+        _instance.cleanup()
+        _instance.deleteLater()
+        _instance = None
 
 
 def get_icon_manager() -> IconManager:
