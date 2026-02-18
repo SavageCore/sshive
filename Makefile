@@ -62,4 +62,4 @@ build:  ## Build wheel package
 lock:  ## Update lock file
 	uv lock
 
-all: sync fix test  ## Complete workflow: sync, fix, test
+all: dev fix test  ## Complete workflow: sync, fix, test
