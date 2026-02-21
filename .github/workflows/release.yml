@@ -1,0 +1,31 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+      - name: Set up Python
+        run: uv python install
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+      - name: Build executable
+        run: make dist
+      - name: Archive executable
+        run: |
+          cd dist
+          tar -czvf sshive-linux-x64.tar.gz sshive
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/sshive-linux-x64.tar.gz
+          generate_release_notes: true

@@ -16,7 +16,12 @@ from sshive.ui.theme import ThemeManager
 
 def get_resource_path(filename: str) -> str:
     """Get path to resource file."""
-    resource_dir = Path(__file__).parent / "resources"
+    if getattr(sys, "frozen", False):
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = Path(sys._MEIPASS)
+        return str(base_path / "sshive" / "resources" / filename)
+
+    resource_dir = Path(__file__).parent / "ui" / "resources"
     return str(resource_dir / filename)
 
 
