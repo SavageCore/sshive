@@ -73,8 +73,9 @@ dist:  ## Build standalone executable with PyInstaller
 		--add-data "sshive/resources:sshive/resources" \
 		--hidden-import "PySide6.QtXml" \
 		--hidden-import "PySide6.QtNetwork" \
-		--icon "sshive/resources/icon.jpg" \
+		--icon "sshive/resources/icon.png" \
 		sshive/main.py
 
-install-app: dist  ## Install valid standalone executable to ~/.local/bin
+## Install valid standalone executable to ~/.local/bin
+install-app: dist
 	./scripts/install.sh

@@ -133,3 +133,6 @@ Thumbs.db
 
 # Ruff
 .ruff_cache/
+
+# Icons
+*.af~lock*
