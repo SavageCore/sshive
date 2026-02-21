@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format clean run sync
+.PHONY: help install dev test lint format clean run sync dist
 
 help:  ## Show this help message
 	@echo 'Usage: make [target]'
@@ -63,3 +63,18 @@ lock:  ## Update lock file
 	uv lock
 
 all: dev fix test  ## Complete workflow: sync, fix, test
+
+dist:  ## Build standalone executable with PyInstaller
+	uv run pyinstaller --name sshive \
+		--onefile \
+		--windowed \
+		--clean \
+		--noconfirm \
+		--add-data "sshive/resources:sshive/resources" \
+		--hidden-import "PySide6.QtXml" \
+		--hidden-import "PySide6.QtNetwork" \
+		--icon "sshive/resources/icon.jpg" \
+		sshive/main.py
+
+install-app: dist  ## Install valid standalone executable to ~/.local/bin
+	./scripts/install.sh

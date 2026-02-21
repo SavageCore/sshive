@@ -1,5 +1,11 @@
 # SSHive 🐝
 
+[![lint](https://github.com/SavageCore/sshive/actions/workflows/lint.yml/badge.svg)](https://github.com/SavageCore/sshive/actions/workflows/lint.yml)
+[![test](https://github.com/SavageCore/sshive/actions/workflows/test.yml/badge.svg)](https://github.com/SavageCore/sshive/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/SavageCore/sshive/graph/badge.svg?token=YOUR_TOKEN)](https://codecov.io/gh/SavageCore/sshive)
+[![release](https://img.shields.io/github/v/release/SavageCore/sshive)](https://github.com/SavageCore/sshive/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Your hive of SSH connections** - A modern, cross-platform SSH connection manager built with PySide6.
 
 Organize your SSH connections into groups, double-click to connect, and never type `ssh user@host` again.
@@ -21,12 +27,25 @@ Organize your SSH connections into groups, double-click to connect, and never ty
 
 ## Installation
 
-### Using uv (Recommended)
+### Standalone Executable (Recommended)
+
+SSHive is distributed as a single executable file. No Python installation required!
+
+1.  Download the latest release from the [Releases page](https://github.com/SavageCore/sshive/releases).
+2.  Make it executable:
+    ```bash
+    chmod +x sshive
+    ```
+3.  Run it:
+    ```bash
+    ./sshive
+    ```
+
+### Install from Source
+
+You can build and install SSHive locally using `uv`:
 
 ```bash
-# Install uv if you haven't already
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # Clone the repository
 git clone https://github.com/SavageCore/sshive.git
 cd sshive
@@ -34,29 +53,13 @@ cd sshive
 # Install dependencies
 uv sync
 
-# Run SSHive
-uv run sshive
+# Build and Install (binary, icon, desktop entry)
+make install-app
 ```
 
-### Using pip
+This will install `sshive` to `~/.local/bin/` and create a launcher icon. You may need to log out and back in.
 
-```bash
-# Clone and enter directory
-git clone https://github.com/SavageCore/sshive.git
-cd sshive
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install
-pip install -e ".[dev]"
-
-# Run
-sshive
-```
-
-## Running SSHive
+## Running from Source
 
 ### With uv
 
@@ -235,15 +238,17 @@ See `examples/connections.json` for more examples.
 
 ## Building & Distribution
 
+To build the standalone executable locally:
+
 ```bash
-# Build wheel package
-uv build
+# Install build dependencies
+uv sync
 
-# Install from wheel
-pip install dist/sshive-0.1.0-py3-none-any.whl
+# Build executable (output in dist/sshive)
+make dist
 
-# Or with uv
-uv pip install dist/sshive-0.1.0-py3-none-any.whl
+# Install to ~/.local/bin
+make install-app
 ```
 
 ## Contributing
