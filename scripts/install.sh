@@ -6,7 +6,7 @@ INSTALL_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
 ICON_DIR="$HOME/.local/share/icons/hicolor/512x512/apps"
 BINARY_SRC="dist/sshive"
-ICON_SRC="sshive/resources/icon.jpg"
+ICON_SRC="sshive/resources/icon.png"
 
 # Colors
 GREEN='\033[0;32m'

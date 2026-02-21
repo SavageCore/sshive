@@ -21,26 +21,22 @@ def get_resource_path(filename: str) -> str:
         base_path = Path(sys._MEIPASS)
         return str(base_path / "sshive" / "resources" / filename)
 
-    resource_dir = Path(__file__).parent / "ui" / "resources"
+    resource_dir = Path(__file__).parent / "resources"
     return str(resource_dir / filename)
 
 
 def main():
     """Main application entry point."""
-    # Force X11 backend (XWayland) on Wayland systems to allow
-    # window position restoration which is otherwise restricted.
-    if os.environ.get("XDG_SESSION_TYPE") == "wayland":
-        os.environ["QT_QPA_PLATFORM"] = "xcb"
-
     app = QApplication(sys.argv)
 
     # Set application metadata
     app.setApplicationName("SSHive")
+    app.setDesktopFileName("sshive")
     app.setOrganizationName("SSHive")
     app.setApplicationVersion("0.1.0")
 
     # Set application icon
-    icon_path = get_resource_path("icon.jpg")
+    icon_path = get_resource_path("icon.png")
     if Path(icon_path).exists():
         app.setWindowIcon(QIcon(icon_path))
 
