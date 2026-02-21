@@ -1,5 +1,6 @@
 """SSH connection launcher with terminal detection."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -98,12 +99,24 @@ class SSHLauncher:
                 # Generic fallback
                 full_cmd = terminal_cmd + ssh_cmd
 
+            # Clean up environment variables so PyInstaller bundles don't
+            # break system terminal apps (e.g. Konsole using wrong Qt versions)
+            env = os.environ.copy()
+            if getattr(sys, "frozen", False):
+                for var in ["LD_LIBRARY_PATH", "PYTHONPATH", "PYTHONHOME", "QT_PLUGIN_PATH"]:
+                    orig_var = f"{var}_ORIG"
+                    if orig_var in env:
+                        env[var] = env[orig_var]
+                    else:
+                        env.pop(var, None)
+
             # Launch in background
             subprocess.Popen(
                 full_cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
+                env=env,
             )
 
             return True
