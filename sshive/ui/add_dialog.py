@@ -179,6 +179,10 @@ class AddConnectionDialog(QDialog):
 
     def _update_icon_preview_from_text(self, text):
         """Update icon preview based on text input."""
+        lower_text = text.lower()
+        if text != lower_text:
+            self.icon_input.setText(lower_text)
+            return  # setText will re-trigger textChanged
         self._update_icon_preview(text)
 
     def _update_icon_preview(self, icon_name):
