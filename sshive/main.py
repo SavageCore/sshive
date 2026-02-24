@@ -3,7 +3,6 @@
 Main entry point for the application.
 """
 
-import os
 import sys
 from pathlib import Path
 
