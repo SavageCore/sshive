@@ -18,6 +18,8 @@ jobs:
         run: uv python install
       - name: Install dependencies
         run: uv sync --all-extras --dev
+      - name: Install Qt system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libxcb-cursor0
       - name: Run tests with coverage
         run: uv run pytest --cov=sshive --cov-report=xml
         env:
