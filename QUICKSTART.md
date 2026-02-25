@@ -42,7 +42,42 @@ uv run sshive
 
 The app will open with an empty connection list.
 
-## Step 4: Add Your First Connection
+## Step 4: Native Linux Packages (Recommended)
+
+If you prefer native packages, you can download `.deb` or `.rpm` files from our [Releases page](https://github.com/SavageCore/sshive/releases).
+
+### Debian/Ubuntu (.deb)
+
+```bash
+sudo dpkg -i sshive.deb
+# If dependencies missing:
+sudo apt-get install -f
+```
+
+### Fedora/RHEL (.rpm)
+
+```bash
+sudo dnf install ./sshive.rpm
+```
+
+### Arch Linux
+
+We provide a `PKGBUILD` in the repository. To build and install:
+
+```bash
+git clone https://github.com/SavageCore/sshive.git
+cd sshive
+makepkg -si
+```
+
+### Flatpak
+
+```bash
+# Build and install locally
+make flatpak
+```
+
+## Step 5: Add Your First Connection
 
 1. Click **"➕ Add Connection"** button
 2. Fill in the form:

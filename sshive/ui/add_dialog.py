@@ -15,10 +15,12 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
 )
 
 from sshive.models.connection import SSHConnection
+from sshive.ui.icon_manager import IconManager
 
 
 class AddConnectionDialog(QDialog):
@@ -88,6 +90,27 @@ class AddConnectionDialog(QDialog):
         key_layout.addWidget(self.key_browse_btn)
         form_layout.addRow("SSH Key:", key_layout)
 
+        # Password
+        password_layout = QHBoxLayout()
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setPlaceholderText("Optional - SSH password")
+
+        self.toggle_password_btn = QToolButton()
+        from sshive.ui.theme import ThemeManager
+
+        icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
+        import qtawesome as qta
+
+        self.toggle_password_btn.setIcon(qta.icon("fa5s.eye", color=icon_color))
+        self.toggle_password_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_password_btn.clicked.connect(self._toggle_password_visibility)
+        self.toggle_password_btn.setStyleSheet("border: none; padding: 4px;")
+
+        password_layout.addWidget(self.password_input)
+        password_layout.addWidget(self.toggle_password_btn)
+        form_layout.addRow("Password:", password_layout)
+
         # Group (combobox with editable text)
         self.group_input = QComboBox()
         self.group_input.setEditable(True)
@@ -116,7 +139,6 @@ class AddConnectionDialog(QDialog):
         layout.addLayout(form_layout)
 
         # Initialize icon manager
-        from sshive.ui.icon_manager import IconManager
 
         self.icon_manager = IconManager.instance()
         self.icon_manager.icon_loaded.connect(self._on_icon_loaded)
@@ -148,7 +170,10 @@ class AddConnectionDialog(QDialog):
         ssh_dir = Path.home() / ".ssh"
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select SSH Private Key", str(ssh_dir), "All Files (*)"
+            self,
+            "Select SSH Private Key",
+            str(ssh_dir),
+            "SSH Private Keys (*.key *.pem *.ppk id_*);;All Files (*)",
         )
 
         if file_path:
@@ -166,6 +191,9 @@ class AddConnectionDialog(QDialog):
 
         if self.connection.key_path:
             self.key_input.setText(self.connection.key_path)
+
+        if self.connection.password:
+            self.password_input.setText(self.connection.password)
 
         if self.connection.group:
             self.group_input.setCurrentText(self.connection.group)
@@ -191,8 +219,6 @@ class AddConnectionDialog(QDialog):
             self.icon_preview.clear()
             self.icon_preview.setText("No Icon")
             return
-
-        from sshive.ui.icon_manager import IconManager
 
         manager = IconManager.instance()
 
@@ -226,6 +252,21 @@ class AddConnectionDialog(QDialog):
             self.icon_input.setText(icon_name)
             self._update_icon_preview(icon_name)
 
+    def _toggle_password_visibility(self):
+        """Toggle the echo mode of the password input."""
+        current_mode = self.password_input.echoMode()
+        from sshive.ui.theme import ThemeManager
+
+        icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
+        import qtawesome as qta
+
+        if current_mode == QLineEdit.EchoMode.Password:
+            self.password_input.setEchoMode(QLineEdit.EchoMode.Normal)
+            self.toggle_password_btn.setIcon(qta.icon("fa5s.eye-slash", color=icon_color))
+        else:
+            self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.toggle_password_btn.setIcon(qta.icon("fa5s.eye", color=icon_color))
+
     def get_connection(self) -> SSHConnection | None:
         """Get connection from form data.
 
@@ -241,6 +282,7 @@ class AddConnectionDialog(QDialog):
             return None
 
         key_path = self.key_input.text().strip() or None
+        password = self.password_input.text() or None
         group = self.group_input.currentText().strip() or "Default"
         icon = self.icon_input.text().strip() or None
 
@@ -252,6 +294,7 @@ class AddConnectionDialog(QDialog):
                 self.connection.user = user
                 self.connection.port = self.port_input.value()
                 self.connection.key_path = key_path
+                self.connection.password = password
                 self.connection.group = group
                 self.connection.icon = icon
                 return self.connection
@@ -263,6 +306,7 @@ class AddConnectionDialog(QDialog):
                     user=user,
                     port=self.port_input.value(),
                     key_path=key_path,
+                    password=password,
                     group=group,
                     icon=icon,
                 )

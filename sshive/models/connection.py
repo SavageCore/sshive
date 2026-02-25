@@ -24,6 +24,7 @@ class SSHConnection:
     user: str
     port: int = 22
     key_path: str | None = None
+    password: str | None = None
     group: str | None = "Default"
     icon: str | None = None
     id: str = field(default_factory=lambda: __import__("uuid").uuid4().hex)
@@ -51,6 +52,7 @@ class SSHConnection:
             "user": self.user,
             "port": self.port,
             "key_path": self.key_path,
+            "password": self.password,
             "group": self.group,
             "icon": self.icon,
         }
@@ -69,12 +71,13 @@ class SSHConnection:
             user=data["user"],
             port=data.get("port", 22),
             key_path=data.get("key_path"),
+            password=data.get("password"),
             group=data.get("group", "Default"),
             icon=data.get("icon"),
         )
 
     def get_ssh_command(self) -> list[str]:
-        """Generate SSH command arguments.
+        """Generate base SSH command arguments.
 
         Returns:
             List of command arguments suitable for subprocess
