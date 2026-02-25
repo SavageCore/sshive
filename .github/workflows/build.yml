@@ -32,9 +32,24 @@ jobs:
       - name: Build Linux packages
         if: matrix.os == 'ubuntu-latest'
         run: |
-          curl -sfL https://install.goreleaser.com/github.com/goreleaser/nfpm.sh | sh
-          ./bin/nfpm pkg --target dist/
+          make package-prep
           make appimage
+
+      - name: Package .deb
+        if: matrix.os == 'ubuntu-latest'
+        uses: burningalchemist/action-gh-nfpm@v1
+        with:
+          packager: deb
+          target: dist/
+          config: nfpm.yml
+
+      - name: Package .rpm
+        if: matrix.os == 'ubuntu-latest'
+        uses: burningalchemist/action-gh-nfpm@v1
+        with:
+          packager: rpm
+          target: dist/
+          config: nfpm.yml
 
       # Windows-specific build (custom PyInstaller)
       - name: Install MinGW (Windows)
@@ -52,19 +67,27 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          git clone https://github.com/pyinstaller/pyinstaller.git
-          cd pyinstaller/bootloader
+          git clone https://github.com/pyinstaller/pyinstaller.git pyinstaller-src
+          cd pyinstaller-src/bootloader
           python waf distclean
           python waf configure --gcc
           python waf all --target-arch=64bit
           cd ..
           uv pip install .
 
+      - name: Install Build Dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: uv pip install Pillow
+
       - name: Build Windows Executable
         if: matrix.os == 'windows-latest'
         run: uv run pyinstaller --clean sshive.spec
 
       # macOS-specific build
+      - name: Install Build Dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: uv pip install Pillow
+
       - name: Build macOS App Bundle
         if: matrix.os == 'macos-latest'
         run: |
@@ -99,7 +122,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: sshive-windows
-          path: dist/*.exe
+          path: dist/sshive/*.exe
 
       - name: Upload macOS Artifact
         if: matrix.os == 'macos-latest'
