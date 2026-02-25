@@ -11,6 +11,7 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
+    QHeaderView,
     QLineEdit,
     QMainWindow,
     QMenu,
@@ -68,6 +69,25 @@ class MainWindow(QMainWindow):
         if header_state:
             self.tree.header().restoreState(header_state)
 
+        # Force the last visible section to stretch to avoid empty viewport space
+        # which breaks full-width hover highlighting across themes.
+        self._update_column_stretch()
+
+    def _update_column_stretch(self):
+        """Update the stretch mode of the last visible column."""
+        header = self.tree.header()
+        header.setStretchLastSection(False)
+
+        last_visible = -1
+        # Find the last visible logical column
+        for i in range(header.count()):
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+            if not self.tree.isColumnHidden(i):
+                last_visible = i
+
+        if last_visible >= 0:
+            header.setSectionResizeMode(last_visible, QHeaderView.ResizeMode.Stretch)
+
     def _setup_ui(self):
         """Setup the user interface."""
         # Central widget
@@ -120,6 +140,7 @@ class MainWindow(QMainWindow):
         self.tree.setIndentation(20)
         self.tree.setMouseTracking(True)
         self.tree.itemEntered.connect(self._on_item_entered)
+        self.tree.itemClicked.connect(self._on_item_clicked)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
         self.tree.itemDoubleClicked.connect(self._connect_to_server)
@@ -630,6 +651,16 @@ class MainWindow(QMainWindow):
         """Launch SSH connection for the currently selected server."""
         self._connect_to_server(None)
 
+    def _on_item_clicked(self, item: QTreeWidgetItem, column: int):
+        """Toggle expansion when a group item is clicked.
+
+        Args:
+            item: Clicked item
+            column: Clicked column index
+        """
+        if item.childCount() > 0:
+            item.setExpanded(not item.isExpanded())
+
     def _connect_to_server(self, item: QTreeWidgetItem | None):
         """Launch SSH connection for selected server.
 
@@ -734,9 +765,15 @@ class MainWindow(QMainWindow):
         menu = QMenu()
         column_name = self.tree.headerItem().text(column)
         hide_action = menu.addAction(f"Hide {column_name}")
-        hide_action.triggered.connect(lambda: self.tree.setColumnHidden(column, True))
+        hide_action.triggered.connect(lambda: self._hide_column(column))
 
         menu.exec(self.tree.header().mapToGlobal(position))
+
+    def _hide_column(self, column: int):
+        """Hide a column and update stretch behavior."""
+        self.tree.setColumnHidden(column, True)
+        self._update_column_stretch()
+        self.settings.setValue("columnState", self.tree.header().saveState())
 
     def _show_settings_dialog(self):
         """Show the settings dialog."""
@@ -763,6 +800,8 @@ class MainWindow(QMainWindow):
             theme_val = settings.get("theme_preference", "System")
             self.settings.setValue("theme_preference", theme_val)
             self._apply_theme()
+
+            self._update_column_stretch()
 
             # Save column state
             self.settings.setValue("columnState", self.tree.header().saveState())
