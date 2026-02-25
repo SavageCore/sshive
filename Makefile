@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format clean run sync package-prep deb rpm flatpak arch
+.PHONY: help install dev test lint format clean run sync package-prep deb rpm flatpak arch appimage clean-appimage
 
 help:  ## Show this help message
 	@echo 'Usage: make [target]'
@@ -111,5 +111,41 @@ install-rpm:
 	make rpm
 	sudo dnf reinstall ./dist/sshive.rpm -y
 	/usr/bin/sshive
+
+# AppImage targets
+appimage: ## Build AppImage using python-appimage
+	# Install python-appimage
+	uv pip install python-appimage
+	
+	# Build the wheel first (skip sdist to prevent hangs on large temp dirs)
+	uv build --wheel
+	
+	# Prepare recipe
+	rm -rf dist/appimage-recipe
+	mkdir -p dist/appimage-recipe
+	cp scripts/sshive.desktop dist/appimage-recipe/
+	cp sshive/resources/icon.png dist/appimage-recipe/sshive.png
+	
+	# Create entrypoint
+	echo '#!/bin/bash' > dist/appimage-recipe/entrypoint.sh
+	echo 'sshive "$$@"' >> dist/appimage-recipe/entrypoint.sh
+	chmod +x dist/appimage-recipe/entrypoint.sh
+	
+	# Generate requirements without hashes or local paths
+	uv export --format requirements-txt --no-dev --no-hashes --output-file dist/appimage-recipe/requirements.txt
+	sed -i '/^-e/d' dist/appimage-recipe/requirements.txt
+	
+	# Add the built wheel to requirements with absolute path so python-appimage can find it
+	echo "$$(pwd)/$$(ls dist/sshive-*.whl | head -n 1)" >> dist/appimage-recipe/requirements.txt
+	
+	# Build AppImage
+	# We use 3.12 as it's modern and well-supported
+	uv run python-appimage build app -p 3.12 dist/appimage-recipe
+	
+	mv SSHive-*.AppImage dist/SSHive-x86_64.AppImage
+
+clean-appimage: ## Remove build tools and temporary files
+	rm -rf dist/appimage-recipe
+	rm -f SSHive-*.AppImage
 
 

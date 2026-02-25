@@ -31,11 +31,11 @@ def main():
     # Force Fusion style for absolute consistency across all platforms and packages
     app.setStyle("Fusion")
 
-    # Set application metadata
+    # Set application metadata early for QStandardPaths
     app.setApplicationName("sshive")
-    app.setDesktopFileName("sshive")
-    app.setOrganizationName("sshive")
+    app.setOrganizationName("")  # Prevents ~/.config/sshive/sshive nested folder
     app.setApplicationVersion("0.0.0")
+    app.setDesktopFileName("sshive")
 
     # Set application icon
     icon_path = get_resource_path("icon.png")

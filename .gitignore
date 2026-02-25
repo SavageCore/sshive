@@ -143,3 +143,6 @@ Thumbs.db
 build-dir/
 flatpak-build-dir-dev/
 python3-modules.json
+
+# linuxdeploy
+linuxdeploy*

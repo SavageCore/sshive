@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=SSHive
 Comment=SSH Connection Manager
-Exec=/usr/bin/sshive
+Exec=sshive
 Icon=sshive
 Terminal=false
 Type=Application
