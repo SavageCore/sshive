@@ -8,433 +8,163 @@
 
 **Your hive of SSH connections** - A modern, cross-platform SSH connection manager built with PySide6.
 
-Organize your SSH connections into groups, double-click to connect, and never type `ssh user@host` again.
+Organize your SSH connections into hierarchical groups, connect with a single click, and never memorize `ssh -i ~/.ssh/key.pem user@host -p 2222` again.
 
 ## Features
 
-- 🗂️ **Organize connections** into collapsible groups
-- 🚀 **One-click connect** - double-click any server to launch your terminal
-- 🔑 **SSH key support** - configure custom keys per connection
-- 🎨 **Dark/Light mode** - automatically follows your system theme
-- 💾 **Simple storage** - connections saved in JSON (`~/.config/sshive/connections.json`)
-- 🖥️ **Cross-platform** - works on Linux, macOS, and Windows (WSL)
-- 🔍 **Smart terminal detection** - auto-detects konsole, gnome-terminal, alacritty, etc.
+- 🗂️ **Hierarchical Groups:** Organize your connections into folders and subfolders.
+- 🚀 **One-Click Connect:** Double-click any server to instantly launch your system's native terminal emulator.
+- 🔑 **Advanced Authentication:** Native support for SSH Keys (OpenSSH), PuTTY Private Keys (.ppk), and standard password authentication.
+- 🔒 **Background Validation:** Validates your credentials in the background before launching the terminal window, preventing sudden window closures.
+- 🥸 **Incognito Mode:** Press `Ctrl+I` to instantly obfuscate your entire server list with heavily randomized fake data (great for streaming or presenting).
+- 🎨 **Dynamic Icons:** Search and auto-assign self-hosted service icons (powered by selfh.st).
+- 🌓 **Native Theming:** Automatically adapts to your system's dark or light theme using native Fusion styling.
+- 💾 **Portable Storage:** Connections are saved in a simple, portable JSON file (`~/.config/sshive/connections.json`).
 
 ![SSHive Dark Mode](previews/dark.png)
 ![SSHive Light Mode](previews/light.png)
 
-## Requirements
-
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-- **Optional Dependencies** (for specific features):
-  - `sshpass`: For password authentication (Linux/macOS)
-  - `putty-tools` / `puttygen`: For PPK key support
-
 ## Installation
 
-### Standalone Executable (Recommended)
+SSHive is designed to be easily installable across multiple Linux environments, as well as Windows and macOS.
 
-SSHive is distributed as a single executable file. No Python installation required!
+**Choose your Operating System:**  
+[🐧 Linux](#linux) | [🪟 Windows](#windows) | [🍏 macOS](#macos) | [💻 Source (Any OS)](#install-from-source-any-os)
 
-1.  Download the latest release from the [Releases page](https://github.com/SavageCore/sshive/releases).
-2.  Make it executable:
-    ```bash
-    chmod +x sshive
-    ```
-3.  Run it:
-    ```bash
-    ./sshive
-    ```
+### Linux
 
-### Install from Source
+#### Native Linux Packages (Recommended)
 
-You can build and install SSHive locally using `uv`:
+The best way to install SSHive on Linux is using our native packages, which integrate perfectly with your system.
+
+1. Download the latest `.deb` (Debian/Ubuntu) or `.rpm` (Fedora/RHEL) from the [Releases page](https://github.com/SavageCore/sshive/releases).
+2. Install via your package manager:
+   ```bash
+   # Debian/Ubuntu
+   sudo apt install ./SSHive_*.deb
+   # Fedora/RHEL
+   sudo dnf install ./SSHive-*.rpm
+   ```
+3. For **Arch Linux**, clone the repository and build using the provided `PKGBUILD`: `makepkg -si`.
+
+### Flatpak
+
+SSHive is also available as a Flatpak, ideal for immutable distributions or sandboxed environments.
+
+1. Download the latest `.flatpak` bundle from the [Releases page](https://github.com/SavageCore/sshive/releases).
+2. Install it locally:
+   ```bash
+   flatpak install --user SSHive.flatpak
+   ```
+
+### AppImage
+
+If you prefer a single portable executable, you can use the AppImage.
+
+1. Download the latest `.AppImage` from the [Releases page](https://github.com/SavageCore/sshive/releases).
+2. Make it executable:
+   ```bash
+   chmod +x SSHive-x86_64.AppImage
+   ```
+3. Run it, or double-click the file in your file manager.
+
+### Windows
+
+1. Download the latest `.exe` installer or standalone executable from the [Releases page](https://github.com/SavageCore/sshive/releases).
+2. Run the executable.
+3. _Note: Ensure you have `ssh` (usually built-in) and [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) installed if you plan to use password authentication._
+
+### macOS
+
+1. Download the latest `.dmg` or `.app` from the [Releases page](https://github.com/SavageCore/sshive/releases).
+2. Drag SSHive to your Applications folder.
+3. _Note: You may need to run `brew install sshpass` if you plan to use password authentication._
+
+### Install from Source (Any OS)
+
+SSHive is built using `uv`, which makes source installation incredibly fast and reliable. Note: Python 3.10+ is required.
 
 ```bash
 # Clone the repository
 git clone https://github.com/SavageCore/sshive.git
 cd sshive
 
-# Install dependencies
-uv sync
-
-# Build and Install (binary, icon, desktop entry)
-make install-app
-```
-
-This will install `sshive` to `~/.local/bin/` and create a launcher icon. You may need to log out and back in.
-
-## Running from Source
-
-### With uv
-
-```bash
+# Run directly without installing (uv handles the isolated environment)
 uv run sshive
 ```
 
-### With venv
-
-```bash
-source .venv/bin/activate
-sshive
-# or
-python -m sshive.main
-```
-
-## Development
-
-### Setup Development Environment
-
-```bash
-# Install with dev dependencies
-uv sync
-
-# Or with pip
-pip install -e ".[dev]"
-```
-
-### Code Quality
-
-This project uses `ruff` for linting and formatting:
-
-```bash
-# Check code quality
-uv run ruff check .
-
-# Auto-fix issues
-uv run ruff check --fix .
-
-# Format code
-uv run ruff format .
-
-# Run both (recommended before committing)
-uv run ruff check --fix . && uv run ruff format .
-```
-
-### Testing
-
-```bash
-# Run all tests
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov=sshive --cov-report=html
-
-# Run specific test file
-uv run pytest tests/test_models.py
-
-# Watch mode (requires pytest-watch)
-uv run ptw
-```
-
-### Native Linux Packages (Recommended)
-
-SSHive is also available as native packages for various Linux distributions:
-
-- **Debian/Ubuntu**: `.deb` package
-- **Fedora/RHEL**: `.rpm` package
-- **Arch Linux**: `PKGBUILD`
-- **Flatpak**: `org.sshive.SSHive`
-
-See the [Quick Start Guide](QUICKSTART.md) or [Releases page](https://github.com/SavageCore/sshive/releases) for download and installation instructions.
-
-### Using Makefile
-
-Common development and packaging tasks:
-
-```bash
-make help        # Show all commands
-make run         # Run SSHive locally
-make test        # Run tests
-make lint        # Check code quality
-make format      # Format code
-make deb         # Build .deb package (requires nfpm)
-make rpm         # Build .rpm package (requires nfpm)
-make flatpak     # Build Flatpak (requires flatpak-builder)
-make clean       # Clean build artifacts
-```
-
-### Adding Dependencies
-
-```bash
-# Add a new package (updates pyproject.toml automatically)
-uv add package-name
-
-# Add a dev dependency
-uv add --dev package-name
-
-# Sync to install new dependencies
-uv sync
-```
-
-### Project Structure
-
-```
-sshive/
-├── sshive/              # Main package
-│   ├── __init__.py
-│   ├── main.py          # Entry point
-│   ├── resources/       # Icons and assets
-│   │   └── icon.jpg
-│   ├── ui/              # UI components
-│   │   ├── main_window.py
-│   │   ├── add_dialog.py
-│   │   └── theme.py
-│   ├── models/          # Data models
-│   │   ├── connection.py
-│   │   └── storage.py
-│   └── ssh/             # SSH launcher
-│       └── launcher.py
-├── tests/               # Test suite
-│   ├── test_models.py
-│   ├── test_storage.py
-│   ├── test_launcher.py
-│   └── test_ui.py
-├── pyproject.toml       # Project configuration
-├── uv.lock             # Dependency lock file
-├── install_icon.sh      # Icon installation script
-└── README.md
-```
-
-## Usage
+## Usage & Configuration
 
 ### Adding a Connection
 
-1. Click **"➕ Add Connection"** button
-2. Fill in the details:
-   - **Name**: Friendly name (e.g., "Production Server")
-   - **Host**: Hostname or IP
-   - **Port**: SSH port (default: 22)
-   - **User**: SSH username
-   - **SSH Key**: Path to private key (optional)
-   - **Group**: Organize into groups (e.g., "Work", "Personal")
-3. Click **"Save"**
+1. Click **"➕ Add Connection"**
+2. Fill in the connection details: Name, Host, User, and Port.
+3. Choose your Auth Method:
+   - **SSH Key:** Browse for your `id_rsa`, `id_ed25519`, or `.ppk` file.
+   - **Password:** SSHive will securely pass your password to the SSH client (requires `sshpass` on Linux/macOS or `putty` on Windows).
+4. Organize by typing a **Group** name (e.g., `Work/Production`).
+5. (Optional) Enter a service name (like `proxmox` or `portainer`) for a custom icon automatically fetched from [selfh.st/icons](https://selfh.st/icons/).
 
-### Connecting
+### Keyboard Shortcuts
 
-- **Double-click** any connection to launch your terminal and connect
-- Connections are organized by group (collapsible)
-- **Right-click** for context menu with options
+- `Ctrl+I` - Toggle Incognito Mode (obfuscates server list)
+- `Enter` - Connect to selected server (Or double-click)
+- `Delete` - Delete selected connection
+- `Ctrl+N` - New connection
 
-### Terminal Support
+## Requirements & Dependencies
 
-SSHive auto-detects your terminal emulator:
+SSHive relies on your system's utilities to actually perform the SSH connection.
 
-- **Linux**: konsole, gnome-terminal, alacritty, kitty, xterm, tilix, terminator
-- **macOS**: Terminal.app, iTerm2, Alacritty
-- **Windows**: Windows Terminal, WSL
+- **Linux & macOS:**
+  - Requires `ssh` (OpenSSH client, usually pre-installed).
+  - For **Password Auth**, `sshpass` must be installed.
+  - For **.ppk Key Auth**, `puttygen` (from the `putty-tools` package) must be installed to convert the keys dynamically.
+  - **Supported Terminals:** konsole, gnome-terminal, alacritty, kitty, xterm, tilix, terminator, iTerm2, Terminal.app.
+- **Windows:**
+  - Requires `ssh` (usually pre-installed with Windows 10/11).
+  - For **Password Auth** or **.ppk Key Auth**, [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) (`plink.exe`) or [KiTTY](http://www.9bis.net/kitty/) (`klink.exe`) must be installed and added to your system `PATH`.
+  - **Supported Terminals:** Windows Terminal (`wt.exe`), PuTTY (`putty.exe`), KiTTY (`kitty.exe`).
 
-## Configuration
+## Development
 
-Configuration is stored in JSON:
-
-- **Linux/macOS**: `~/.config/sshive/connections.json`
-- **Windows**: `%APPDATA%\sshive\connections.json`
-
-Example configuration:
-
-```json
-{
-  "version": "1.0",
-  "connections": [
-    {
-      "id": "abc123",
-      "name": "Production Server",
-      "host": "prod.example.com",
-      "port": 22,
-      "user": "deploy",
-      "key_path": "~/.ssh/id_rsa",
-      "group": "Work"
-    }
-  ]
-}
-```
-
-See `examples/connections.json` for more examples.
-
-## Building & Distribution
-
-To build the standalone executable locally:
+We welcome contributions! The project uses `uv` for lightning-fast dependency management, `ruff` for linting, and `pytest` for testing.
 
 ```bash
-# Install build dependencies
-uv sync
-
-# Build executable (output in dist/sshive)
-make dist
-
-# Install to ~/.local/bin
-make install-app
-```
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Quick Start for Contributors
-
-```bash
-# Fork and clone
+# Setup the project
 git clone https://github.com/SavageCore/sshive.git
 cd sshive
-
-# Install dev dependencies
 uv sync
 
-# Make your changes
+# Run the app locally
+make run
 
-# Run quality checks
-make fix      # Fix linting and formatting
-make test     # Ensure all tests pass
+# Run the test suite
+make test
 
-# Commit and push
-git add .
-git commit -m "Add feature: description"
-git push origin feature-branch
+# Format and lint code
+make fix
 ```
 
-## uv Workflow Reference
+### Building Packages
+
+You can also build the application formats locally by executing these Makefile targets from the project directory:
 
 ```bash
-# Installation & Setup
-uv sync                          # Install all dependencies from lock file
-uv sync --all-extras            # Install with all optional dependencies
+# Build the flatpak (Requires flatpak-builder installed)
+make flatpak
 
-# Running
-uv run sshive                   # Run the app (no venv activation needed!)
-uv run pytest                   # Run tests
-uv run ruff check .             # Lint code
+# Build an AppImage locally
+make appimage
 
-# Managing Dependencies
-uv add qtawesome                # Add package (updates pyproject.toml)
-uv add --dev pytest-watch       # Add dev dependency
-uv remove package-name          # Remove package
-uv lock                         # Update lock file
-uv lock --upgrade               # Upgrade all dependencies
-
-# Building
-uv build                        # Build distribution packages
-```
-
-## Why uv?
-
-- **Fast**: 10-100x faster than pip
-- **Modern**: Better dependency resolution with lock files
-- **Reliable**: Consistent installs across machines (via `uv.lock`)
-- **Simple**: No need to activate virtual environments with `uv run`
-- **Compatible**: Drop-in replacement for pip
-
-## Troubleshooting
-
-### Icon Not Showing in Taskbar
-
-Run the icon installation script:
-
-```bash
-./install_icon.sh
-```
-
-Then restart SSHive and/or KDE Plasma. See `ICON_INSTALLATION.md` for details.
-
-### Terminal Won't Launch
-
-**Issue:** "Failed to launch terminal"
-
-**Solution:** Install a supported terminal emulator:
-
-```bash
-# Ubuntu/Debian
-sudo apt install konsole sshpass putty-tools
-
-# Fedora/RHEL
-sudo dnf install konsole sshpass putty
-
-# Arch Linux
-sudo pacman -S konsole sshpass putty
-
-# macOS (via Homebrew)
-brew install --cask iterm2
-brew install sshpass putty
-```
-
-**Note for Windows:**
-
-- For **PPK** support, ensure `puttygen` is in your PATH (usually installed with PuTTY).
-- For **Password** authentication:
-  - Install [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) (provides `plink.exe`) or [KiTTY](http://www.9bis.net/kitty/) (provides `klink.exe`).
-  - Ensure the executable is in your PATH.
-  - SSHive will automatically detect and use these to provide password support.
-  - Alternatively, use SSH keys (recommended) or run SSHive within **WSL**.
-
-### Connection Fails
-
-**Issue:** "Cannot connect to server"
-
-**Check:**
-
-1. SSH is installed: `which ssh`
-2. Key file exists: `ls -la ~/.ssh/id_rsa`
-3. Can connect manually: `ssh user@host`
-4. Correct permissions on key: `chmod 600 ~/.ssh/id_rsa`
-
-### Package Not Found
-
-If you get "ModuleNotFoundError" after adding a package:
-
-```bash
-# Make sure to sync after editing pyproject.toml
-uv sync
-
-# Or if you used uv add, it should auto-sync
-uv add package-name
-```
-
-### Using Wrong Python
-
-```bash
-# Check which Python uv is using
-uv run python --version
-
-# Should match your system Python 3.10+
+# Build a .deb or .rpm package (Requires nfpm installed)
+make deb
+make rpm
 ```
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-## Roadmap
-
-- [x] Basic connection management
-- [x] SSH key support
-- [x] Dark/light mode
-- [x] Terminal auto-detection
-- [x] Beautiful icon
-- [ ] Import from PuTTY/KiTTY sessions
-- [ ] Export/backup connections
-- [ ] Search/filter connections
-- [ ] Recent connections history
-- [ ] Custom terminal command templates
-- [ ] Connection testing (ping/connectivity check)
-- [ ] Port forwarding/tunneling support
-- [ ] Connection sharing between machines
-- [ ] Global keyboard shortcuts
-- [ ] System tray integration
-
-## Acknowledgments
-
-Built with:
-
-- [PySide6](https://wiki.qt.io/Qt_for_Python) - Qt for Python
-- [uv](https://github.com/astral-sh/uv) - Fast Python package installer
-- [ruff](https://github.com/astral-sh/ruff) - Fast Python linter & formatter
-- [QtAwesome](https://github.com/spyder-ide/qtawesome) - Icon fonts for Qt
-
-## Support
-
-- 📖 [Documentation](README.md)
-- 🚀 [Quick Start Guide](QUICKSTART.md)
-- 🐛 [Report Issues](https://github.com/SavageCore/sshive/issues)
-- 💬 [Discussions](https://github.com/SavageCore/sshive/discussions)
 
 ---
 
