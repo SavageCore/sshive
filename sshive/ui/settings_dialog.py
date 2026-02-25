@@ -2,6 +2,7 @@
 
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QGroupBox,
@@ -57,6 +58,16 @@ class SettingsDialog(QDialog):
 
         gen_layout.addWidget(self.verify_check)
         gen_layout.addWidget(help_text)
+
+        # Theme Preference
+        theme_label = QLabel("Theme Preference:")
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["System", "Dark", "Light"])
+        theme_val = self.settings.value("theme_preference", "System")
+        self.theme_combo.setCurrentText(theme_val)
+        gen_layout.addWidget(theme_label)
+        gen_layout.addWidget(self.theme_combo)
+
         gen_group.setLayout(gen_layout)
         layout.addWidget(gen_group)
 
@@ -92,5 +103,6 @@ class SettingsDialog(QDialog):
         """
         return {
             "verify_credentials": self.verify_check.isChecked(),
+            "theme_preference": self.theme_combo.currentText(),
             "column_visibility": {idx: check.isChecked() for idx, check in self.col_checks},
         }

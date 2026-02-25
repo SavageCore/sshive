@@ -14,15 +14,29 @@ class ThemeManager:
         Returns:
             True if dark mode is active
         """
-        palette = QApplication.palette()
-        bg_color = palette.color(QPalette.ColorRole.Window)
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QGuiApplication
 
-        # Calculate luminance - if background is dark, we're in dark mode
-        luminance = (
-            0.299 * bg_color.red() + 0.587 * bg_color.green() + 0.114 * bg_color.blue()
-        ) / 255
+        # 1. Try Qt 6.5+ style hints (most reliable)
+        try:
+            hints = QGuiApplication.styleHints()
+            if hasattr(Qt.ColorScheme, "Dark"):
+                return hints.colorScheme() == Qt.ColorScheme.Dark
+        except (AttributeError, ImportError):
+            pass
 
-        return luminance < 0.5
+        # 2. Fallback: Check the standard palette of the style (Fusion)
+        # We don't use QApplication.palette() because it may have been overridden by us
+        app = QApplication.instance()
+        if app:
+            palette = app.style().standardPalette()
+            bg_color = palette.color(QPalette.ColorRole.Window)
+            luminance = (
+                0.299 * bg_color.red() + 0.587 * bg_color.green() + 0.114 * bg_color.blue()
+            ) / 255
+            return luminance < 0.5
+
+        return False
 
     @staticmethod
     def apply_theme(app: QApplication) -> None:
@@ -93,9 +107,6 @@ class ThemeManager:
             QHeaderView::section:last {
                 border-right: none;
             }
-            QTreeView::item:hover {
-                background-color: #404040;
-            }
             QLineEdit {
                 padding: 4px 8px;
                 border: 1px solid #505050;
@@ -131,37 +142,88 @@ class ThemeManager:
 
     @staticmethod
     def apply_light_theme(app: QApplication) -> None:
-        """Apply light theme colors (uses system default).
+        """Apply light theme colors using QPalette to preserve native styling.
 
         Args:
             app: QApplication instance
         """
-        # Reset to default palette
-        app.setPalette(app.style().standardPalette())
+        app.setStyle("Fusion")
 
-        # Minimal styling for consistency
+        # Build a full Light Palette so we don't rely on the system's standard palette (which may be dark)
+        light_palette = QPalette()
+        light_palette.setColor(QPalette.ColorRole.Window, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.ColorRole.WindowText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
+        light_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(245, 245, 245))
+        light_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
+        light_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.ColorRole.Text, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.ColorRole.Button, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.ColorRole.ButtonText, QColor(0, 0, 0))
+        light_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
+        light_palette.setColor(QPalette.ColorRole.Link, QColor(0, 0, 255))
+
+        # Selection colors
+        light_palette.setColor(QPalette.ColorRole.Highlight, QColor(204, 232, 255))
+        light_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(0, 0, 0))
+
+        # Disabled colors
+        light_disabled = QColor(127, 127, 127)
+        light_palette.setColor(
+            QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, light_disabled
+        )
+        light_palette.setColor(
+            QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, light_disabled
+        )
+        light_palette.setColor(
+            QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, light_disabled
+        )
+
+        app.setPalette(light_palette)
+
+        # Minimal styling that doesn't break Fusion's native QTreeView drawing.
         app.setStyleSheet("""
-            QTreeView::item:hover {
-                background-color: #e0e0e0;
-            }
-            QToolButton {
+            QTreeView {
+                show-decoration-selected: 1;
+                outline: none;
+                border: none;
             }
             QPushButton {
                 padding: 5px 15px;
                 border-radius: 4px;
-                border: 1px solid #cccccc;
-                background-color: #f0f0f0;
+                border: 1px solid rgba(0, 0, 0, 0.2);
             }
             QPushButton:hover {
-                background-color: #e5e5e5;
-                border-color: #bbbbbb;
+                background-color: rgba(0, 0, 0, 0.05);
+                border-color: rgba(0, 0, 0, 0.3);
             }
             QPushButton:pressed {
-                background-color: #d0d0d0;
+                background-color: rgba(0, 0, 0, 0.15);
             }
             QPushButton:disabled {
-                border-color: #e0e0e0;
-                background-color: #f9f9f9;
-                color: #aaaaaa;
+                border-color: rgba(0, 0, 0, 0.1);
+                background-color: rgba(0, 0, 0, 0.05);
+            }
+            QLineEdit {
+                padding: 4px 8px;
+                border: 1px solid rgba(0, 0, 0, 0.3);
+                border-radius: 4px;
+            }
+            QLineEdit:focus {
+                border-color: #0078D7;
+            }
+            QHeaderView::section {
+                background-color: #e0e0e0;
+                color: #000000;
+                padding: 4px 6px;
+                border: 1px solid #cccccc;
+                border-top: none;
+                border-left: none;
+            }
+            QHeaderView::section:last {
+                border-right: none;
+            }
+            QToolButton {
+                border: none;
             }
         """)

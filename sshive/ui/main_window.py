@@ -43,8 +43,9 @@ class MainWindow(QMainWindow):
         self.storage = ConnectionStorage()
         self.connections: list[SSHConnection] = []
 
-        # Determine icon color based on theme
-        self.icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
+        # Determine icon color based on theme preference
+        self.settings = QSettings("sshive", "sshive")
+        self._apply_theme()
 
         self.incognito_mode = False
         self._setup_ui()
@@ -56,9 +57,6 @@ class MainWindow(QMainWindow):
         self._load_connections()
 
         self.setWindowTitle("SSHive - SSH Connection Manager")
-
-        # Restore window state and geometry
-        self.settings = QSettings("sshive", "sshive")
 
         # Restore window state and geometry (Wayland may only restore size)
         if not self.restoreGeometry(self.settings.value("geometry", b"")):
@@ -117,6 +115,7 @@ class MainWindow(QMainWindow):
         self.tree.setColumnWidth(2, 150)
         self.tree.setAlternatingRowColors(False)
         self.tree.setAllColumnsShowFocus(True)
+        self.tree.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
         self.tree.setRootIsDecorated(True)
         self.tree.setIndentation(20)
         self.tree.setMouseTracking(True)
@@ -627,6 +626,10 @@ class MainWindow(QMainWindow):
             self.storage.delete_connection(connection.id)
             self._load_connections()
 
+    def _connect_to_selected_server(self):
+        """Launch SSH connection for the currently selected server."""
+        self._connect_to_server(None)
+
     def _connect_to_server(self, item: QTreeWidgetItem | None):
         """Launch SSH connection for selected server.
 
@@ -756,5 +759,39 @@ class MainWindow(QMainWindow):
             for idx, visible in settings["column_visibility"].items():
                 self.tree.setColumnHidden(idx, not visible)
 
+            # Save theme preference and apply
+            theme_val = settings.get("theme_preference", "System")
+            self.settings.setValue("theme_preference", theme_val)
+            self._apply_theme()
+
             # Save column state
             self.settings.setValue("columnState", self.tree.header().saveState())
+
+    def _apply_theme(self):
+        """Apply the theme based on user settings and update icons appropriately."""
+        theme_val = self.settings.value("theme_preference", "System")
+
+        if theme_val == "Dark":
+            ThemeManager.apply_dark_theme(QApplication.instance())
+            self.icon_color = "white"
+        elif theme_val == "Light":
+            ThemeManager.apply_light_theme(QApplication.instance())
+            self.icon_color = "black"
+        else:  # System or fallback
+            ThemeManager.apply_theme(QApplication.instance())
+            self.icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
+
+        # Update icons in UI if they already exist
+        if hasattr(self, "search_bar"):
+            search_action = self.search_bar.actions()[0]
+            search_action.setIcon(qta.icon("fa5s.search", color=self.icon_color))
+
+            self.settings_btn.setIcon(qta.icon("fa5s.cog", color=self.icon_color))
+            self.add_btn.setIcon(qta.icon("fa5s.plus", color=self.icon_color))
+            self.clone_btn.setIcon(qta.icon("fa5s.clone", color=self.icon_color))
+            self.edit_btn.setIcon(qta.icon("fa5s.edit", color=self.icon_color))
+            self.delete_btn.setIcon(qta.icon("fa5s.trash", color=self.icon_color))
+            self.connect_btn.setIcon(qta.icon("fa5s.rocket", color=self.icon_color))
+
+            # Repopulate tree to refresh folder/server icons
+            self._populate_tree()
