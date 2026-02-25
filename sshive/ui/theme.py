@@ -62,8 +62,8 @@ class ThemeManager:
         dark_palette.setColor(QPalette.ColorRole.ButtonText, dark_fg)
         dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
         dark_palette.setColor(QPalette.ColorRole.Link, dark_highlight)
-        dark_palette.setColor(QPalette.ColorRole.Highlight, dark_highlight)
-        dark_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(0, 0, 0))
+        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(80, 80, 80))  # subtle gray
+        dark_palette.setColor(QPalette.ColorRole.HighlightedText, dark_fg)  # white
 
         # Disabled colors
         dark_palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, dark_disabled)
@@ -75,19 +75,46 @@ class ThemeManager:
 
         # Additional stylesheet tweaks
         app.setStyleSheet("""
-            QTreeView::item:selected {
-                background-color: #2a82da;
-                color: white;
+            QTreeView {
+                selection-background-color: #505050;
+                selection-color: white;
+                show-decoration-selected: 1;
+                outline: none;
+                border: none;
+            }
+            QHeaderView::section {
+                background-color: #3d3d3d;
+                color: #ffffff;
+                padding: 4px 6px;
+                border: 1px solid #505050;
+                border-top: none;
+                border-left: none;
+            }
+            QHeaderView::section:last {
+                border-right: none;
             }
             QTreeView::item:hover {
                 background-color: #404040;
             }
+            QToolButton {
+            }
             QPushButton {
                 padding: 5px 15px;
-                border-radius: 3px;
+                border-radius: 4px;
+                border: 1px solid #505050;
+                background-color: #3d3d3d;
             }
             QPushButton:hover {
                 background-color: #505050;
+                border-color: #606060;
+            }
+            QPushButton:pressed {
+                background-color: #303030;
+            }
+            QPushButton:disabled {
+                border-color: #353535;
+                background-color: #353535;
+                color: #7f7f7f;
             }
         """)
 
@@ -106,8 +133,24 @@ class ThemeManager:
             QTreeView::item:hover {
                 background-color: #e0e0e0;
             }
+            QToolButton {
+            }
             QPushButton {
                 padding: 5px 15px;
-                border-radius: 3px;
+                border-radius: 4px;
+                border: 1px solid #cccccc;
+                background-color: #f0f0f0;
+            }
+            QPushButton:hover {
+                background-color: #e5e5e5;
+                border-color: #bbbbbb;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+            QPushButton:disabled {
+                border-color: #e0e0e0;
+                background-color: #f9f9f9;
+                color: #aaaaaa;
             }
         """)

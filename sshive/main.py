@@ -28,6 +28,9 @@ def main():
     """Main application entry point."""
     app = QApplication(sys.argv)
 
+    # Force Fusion style for absolute consistency across all platforms and packages
+    app.setStyle("Fusion")
+
     # Set application metadata
     app.setApplicationName("SSHive")
     app.setDesktopFileName("sshive")

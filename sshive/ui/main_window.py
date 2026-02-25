@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SSHive - SSH Connection Manager")
 
         # Restore window state and geometry
-        self.settings = QSettings("sshive", "sshive")
+        self.settings = QSettings("SSHive", "SSHive")
 
         # Note: on Wayland, restoreGeometry will typically only restore the window size,
         # as the compositor restricts applications from setting their own position.
@@ -81,6 +81,8 @@ class MainWindow(QMainWindow):
         self.view_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.view_btn.setToolTip("Column Visibility")
         self.view_btn.setStyleSheet("border: none; padding: 4px;")
+        self.view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.view_menu = QMenu(self.view_btn)
         self.view_btn.setMenu(self.view_menu)
@@ -98,7 +100,12 @@ class MainWindow(QMainWindow):
         self.tree.setColumnWidth(0, 250)
         self.tree.setColumnWidth(1, 200)
         self.tree.setColumnWidth(2, 150)
-        self.tree.setAlternatingRowColors(True)
+        self.tree.setAlternatingRowColors(False)
+        self.tree.setAllColumnsShowFocus(True)
+        self.tree.setRootIsDecorated(True)
+        self.tree.setIndentation(20)
+        self.tree.setMouseTracking(True)
+        self.tree.itemEntered.connect(self._on_item_entered)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
         self.tree.itemDoubleClicked.connect(self._connect_to_server)
@@ -115,12 +122,14 @@ class MainWindow(QMainWindow):
 
         self.add_btn = QPushButton("Add Connection")
         self.add_btn.setIcon(add_icon)
+        self.add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_btn.clicked.connect(self._add_connection)
         button_layout.addWidget(self.add_btn)
 
         clone_icon = qta.icon("fa5s.clone", color=self.icon_color)
         self.clone_btn = QPushButton("Clone")
         self.clone_btn.setIcon(clone_icon)
+        self.clone_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clone_btn.clicked.connect(self._clone_connection)
         self.clone_btn.setEnabled(False)
         button_layout.addWidget(self.clone_btn)
@@ -128,6 +137,7 @@ class MainWindow(QMainWindow):
         edit_icon = qta.icon("fa5s.edit", color=self.icon_color)
         self.edit_btn = QPushButton("Edit")
         self.edit_btn.setIcon(edit_icon)
+        self.edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.edit_btn.clicked.connect(lambda: self._edit_connection())
         self.edit_btn.setEnabled(False)
         button_layout.addWidget(self.edit_btn)
@@ -135,6 +145,7 @@ class MainWindow(QMainWindow):
         delete_icon = qta.icon("fa5s.trash", color=self.icon_color)
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.setIcon(delete_icon)
+        self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_btn.clicked.connect(self._delete_connection)
         self.delete_btn.setEnabled(False)
         button_layout.addWidget(self.delete_btn)
@@ -144,6 +155,7 @@ class MainWindow(QMainWindow):
         connect_icon = qta.icon("fa5s.rocket", color=self.icon_color)
         self.connect_btn = QPushButton("Connect")
         self.connect_btn.setIcon(connect_icon)
+        self.connect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.connect_btn.clicked.connect(lambda: self._connect_to_server(None))
         self.connect_btn.setEnabled(False)
         self.connect_btn.setDefault(True)
@@ -242,6 +254,14 @@ class MainWindow(QMainWindow):
             if conn and conn.icon == name:
                 item.setIcon(0, QIcon(path))
             it += 1
+
+    def _on_item_entered(self, item: QTreeWidgetItem, column: int):
+        """Update cursor based on item type."""
+        connection = item.data(0, Qt.ItemDataRole.UserRole)
+        if connection is None:  # It's a group
+            self.tree.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            self.tree.setCursor(Qt.CursorShape.ArrowCursor)
 
     def _on_selection_changed(self):
         """Handle tree selection changes."""
