@@ -51,7 +51,6 @@ class IconManager(QObject):
 
     def __del__(self):
         """Ensure cleanup on destruction."""
-        # Note: Be careful with QObject cleanup in __del__
         pass
 
     def _track_reply(self, reply: QNetworkReply):
@@ -149,8 +148,7 @@ class IconManager(QObject):
         request = QNetworkRequest(QUrl(url))
         reply = self.network.get(request)
         self._track_reply(reply)
-        # We need to capture the name for the callback, but avoid capturing 'self' in a way that leaks.
-        # Signal mapper or dynamic property is safer.
+        # Use dynamic property to pass data to callback safely
         reply.setProperty("icon_name", name)
         reply.setProperty("icon_path", str(icon_path))
         reply.finished.connect(self._on_icon_downloaded_finished)
@@ -171,7 +169,6 @@ class IconManager(QObject):
                     f.write(data)
                 self.icon_loaded.emit(name, str(path))
         else:
-            # print(f"Failed to fetch icon {name}: {reply.errorString()}")
             pass
         reply.deleteLater()
 

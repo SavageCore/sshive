@@ -125,8 +125,7 @@ class TestMainWindow:
         conn_item = group_item.child(0)
         window.tree.setCurrentItem(conn_item)
 
-        # Mock AddConnectionDialog to automatically "accept" and return the cloned connection
-        # we capture the connection object created in _clone_connection
+        # Mock AddConnectionDialog to capture cloned connection
         cloned_conn_captured = [None]
 
         class MockDialog:
@@ -177,8 +176,7 @@ class TestMainWindow:
         # Toggle incognito mode
         window._toggle_incognito_mode()
 
-        # CRITICAL: Previous items are now invalidated because tree was cleared
-        # Re-fetch them
+        # Re-fetch invalidated tree items
         group_item = window.tree.topLevelItem(0)
         conn_item = group_item.child(0)
 

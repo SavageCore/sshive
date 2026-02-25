@@ -314,7 +314,7 @@ class TestSSHLauncher:
             call_args = mock_popen.call_args[0][0]
             assert "bash" in call_args
             assert "-c" in call_args
-            # The command string should contain the original ssh command AND the pause logic
+            # Verify command string contains ssh command and pause logic
             cmd_str = call_args[-1]
             assert "ssh" in cmd_str
             assert "read -p" in cmd_str

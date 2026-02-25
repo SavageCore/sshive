@@ -89,9 +89,7 @@ class SSHLauncher:
                     temp_key = Path(temp_key_path)
 
                     try:
-                        # Convert PPK to OpenSSH format
-                        # This works if the PPK is not passphrase protected
-                        # If it is, puttygen will fail or hang, but for now we'll try
+                        # Convert unencrypted PPK to OpenSSH format
                         subprocess.run(
                             [
                                 puttygen,
@@ -155,8 +153,7 @@ class SSHLauncher:
                 ]
                 and sys.platform != "win32"
             ):
-                # On Linux, wrap command in bash to allow pausing on failure
-                # This ensures the window stays open if the connection dies
+                # Wrap Linux command in bash to keep window open on failure
                 cmd_str = " ".join([f'"{arg}"' if " " in arg else arg for arg in ssh_cmd])
                 wrapped_cmd = f"{cmd_str} || {{ echo -v; echo '----------------------------------------'; echo 'Connection failed or closed.'; read -p 'Press Enter to close...'; }}"
                 full_cmd = terminal_cmd + ["bash", "-c", wrapped_cmd]
@@ -166,7 +163,7 @@ class SSHLauncher:
                 full_cmd = terminal_cmd + ssh_cmd
 
             elif terminal_name == "wt":
-                # Windows Terminal - could use cmd /k but usually plink handles itself
+                # Windows Terminal handles plink directly
                 full_cmd = terminal_cmd + ssh_cmd
 
             elif terminal_name in ["iTerm", "Terminal"]:
@@ -178,8 +175,7 @@ class SSHLauncher:
                 # Generic fallback
                 full_cmd = terminal_cmd + ssh_cmd
 
-            # Clean up environment variables so PyInstaller bundles don't
-            # break system terminal apps (e.g. Konsole using wrong Qt versions)
+            # Clean environment variables to prevent bundling conflicts with system terminals
             if getattr(sys, "frozen", False):
                 for var in ["LD_LIBRARY_PATH", "PYTHONPATH", "PYTHONHOME", "QT_PLUGIN_PATH"]:
                     orig_var = f"{var}_ORIG"
@@ -203,7 +199,7 @@ class SSHLauncher:
                 def cleanup():
                     import time
 
-                    time.sleep(5)  # 5 seconds should be enough for ssh to read the key
+                    time.sleep(5)  # Wait for SSH to read key
                     try:
                         if temp_key.exists():
                             temp_key.unlink()
@@ -276,13 +272,11 @@ class SSHLauncher:
                 "StrictHostKeyChecking=accept-new",
             ]
 
-            # If no password, use BatchMode to avoid hanging on passphrase prompts
+            # Use BatchMode if no password to avoid hanging on passphrase prompts
             if not connection.password:
                 base_ssh_args.extend(["-o", "BatchMode=yes"])
             else:
                 base_ssh_args.extend(["-o", "BatchMode=no"])
-                # If we have a password, we might want to force it if key fails
-                # but for the check we'll just try the whole auth stack
 
             env = os.environ.copy()
             if sys.platform != "win32":

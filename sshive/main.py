@@ -16,7 +16,7 @@ from sshive.ui.theme import ThemeManager
 def get_resource_path(filename: str) -> str:
     """Get path to resource file."""
     if getattr(sys, "frozen", False):
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        # Handle PyInstaller temporary folder path
         base_path = Path(sys._MEIPASS)
         return str(base_path / "sshive" / "resources" / filename)
 
@@ -28,12 +28,12 @@ def main():
     """Main application entry point."""
     app = QApplication(sys.argv)
 
-    # Force Fusion style for absolute consistency across all platforms and packages
+    # Use Fusion style for cross-platform consistency
     app.setStyle("Fusion")
 
     # Set application metadata early for QStandardPaths
     app.setApplicationName("sshive")
-    app.setOrganizationName("")  # Prevents ~/.config/sshive/sshive nested folder
+    app.setOrganizationName("")  # Prevent nested config folder
     app.setApplicationVersion("0.0.0")
     app.setDesktopFileName("sshive")
 

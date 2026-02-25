@@ -60,8 +60,7 @@ class MainWindow(QMainWindow):
         # Restore window state and geometry
         self.settings = QSettings("sshive", "sshive")
 
-        # Note: on Wayland, restoreGeometry will typically only restore the window size,
-        # as the compositor restricts applications from setting their own position.
+        # Restore window state and geometry (Wayland may only restore size)
         if not self.restoreGeometry(self.settings.value("geometry", b"")):
             self.resize(800, 600)
 
@@ -189,10 +188,7 @@ class MainWindow(QMainWindow):
         self._status_msg = None
 
     def _show_status(self, message: str):
-        """Show a temporarily status message (simple msg box or overlay)."""
-        # For now we'll just use the status bar if we had one,
-        # but we'll print it to avoid blocking.
-        # A more complex UI might use a progress dialog.
+        """Show a temporary status message."""
         print(f"Status: {message}")
 
     def _setup_shortcuts(self):
@@ -235,11 +231,8 @@ class MainWindow(QMainWindow):
                 with open(incognito_path) as f:
                     data = json.load(f)
 
-                    # Version check to force re-generation if logic changes
                     if isinstance(data, dict) and data.get("version") == self.INCOGNITO_VERSION:
                         return [SSHConnection.from_dict(conn) for conn in data["connections"]]
-
-                    # If it's a list (old format) or wrong version, it will fall through to re-generate
             except Exception as e:
                 print(f"Failed to load incognito connections: {e}")
 
@@ -248,10 +241,10 @@ class MainWindow(QMainWindow):
         used_identities = set()
 
         for i, conn in enumerate(self.connections):
-            # Pass index i to ensure we cycles through services correctly
+            # Ensure we cycle through services correctly
             name, host, user, group, icon, _ = self._get_fake_data(conn.id, service_index=i)
 
-            # If identity already used (unlikely with new IP logic but stay safe), try to vary it
+            # Handle potential identity collisions
             counter = 1
             while (name, host) in used_identities and counter < 10:
                 name, host, user, group, icon, _ = self._get_fake_data(
@@ -261,7 +254,7 @@ class MainWindow(QMainWindow):
 
             used_identities.add((name, host))
 
-            # Use deterministic but randomized port
+            # Use deterministic port
             _, _, _, _, _, fake_port = self._get_fake_data(conn.id, service_index=i)
 
             fake_conn = SSHConnection(
@@ -275,7 +268,7 @@ class MainWindow(QMainWindow):
             )
             fake_conns.append(fake_conn)
 
-        # Save generated ones for consistency/user customization
+        # Save generated connections for consistency
         try:
             config_dir.mkdir(parents=True, exist_ok=True)
             output_data = {
@@ -364,11 +357,10 @@ class MainWindow(QMainWindow):
         group = service_info[1]
         icon = service_info[2]
 
-        # Generate a realistic-looking local IP randomized by the seed
-        # Use different transformations of the seed to avoid correlations
+        # Generate deterministic local IP
         host_byte = (seed >> 16) % 254 + 1
 
-        # Decide between 192.168.x.y, 10.0.x.y, or 172.16.x.y
+        # Assign subnet based on seed
         ip_prefix = seed % 3
         if ip_prefix == 0:
             subnet = (seed >> 12) % 10  # More variety in subnets
@@ -382,7 +374,7 @@ class MainWindow(QMainWindow):
 
         user = users[seed % len(users)]
 
-        # Generate a deterministic but randomized port between 1024 and 65535
+        # Generate deterministic port
         port = 1024 + (seed % (65535 - 1024 + 1))
 
         return name, host, user, group, icon, port
@@ -505,8 +497,7 @@ class MainWindow(QMainWindow):
                         parent.setHidden(False)
                         parent = parent.parent()
             else:
-                # It's a group item - initially hide it, it will be shown if children match
-                # BUT if search is empty, show everything
+                # Handle group items visibility
                 if not text:
                     item.setHidden(False)
                 else:
@@ -561,9 +552,7 @@ class MainWindow(QMainWindow):
         if not connection:
             return
 
-        # Create a new connection based on the existing one with a fresh ID
-        # This prevents duplicate IDs in the storage
-
+        # Clone with fresh ID to prevent duplicates
         new_connection = SSHConnection(
             name=f"{connection.name} (Copy)",
             host=connection.host,
