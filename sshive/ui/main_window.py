@@ -208,7 +208,7 @@ class MainWindow(QMainWindow):
 
         self._populate_tree()
 
-    INCOGNITO_VERSION = 2
+    INCOGNITO_VERSION = 3
 
     def _load_or_generate_incognito_connections(self) -> list[SSHConnection]:
         """Load fake connections from file or generate them deterministically."""
@@ -239,23 +239,26 @@ class MainWindow(QMainWindow):
 
         for i, conn in enumerate(self.connections):
             # Pass index i to ensure we cycles through services correctly
-            name, host, user, group, icon = self._get_fake_data(conn.id, service_index=i)
+            name, host, user, group, icon, _ = self._get_fake_data(conn.id, service_index=i)
 
             # If identity already used (unlikely with new IP logic but stay safe), try to vary it
             counter = 1
             while (name, host) in used_identities and counter < 10:
-                name, host, user, group, icon = self._get_fake_data(
+                name, host, user, group, icon, _ = self._get_fake_data(
                     f"{conn.id}-{counter}", service_index=i + counter
                 )
                 counter += 1
 
             used_identities.add((name, host))
 
+            # Use deterministic but randomized port
+            _, _, _, _, _, fake_port = self._get_fake_data(conn.id, service_index=i)
+
             fake_conn = SSHConnection(
                 name=name,
                 host=host,
                 user=user,
-                port=conn.port,
+                port=fake_port,
                 group=group,
                 icon=icon,
                 id=conn.id,
@@ -286,7 +289,7 @@ class MainWindow(QMainWindow):
             service_index: Optional index to force a specific service selection
 
         Returns:
-            Tuple of (name, host, user, group, icon)
+            Tuple of (name, host, user, group, icon, port)
         """
         import hashlib
 
@@ -370,7 +373,10 @@ class MainWindow(QMainWindow):
 
         user = users[seed % len(users)]
 
-        return name, host, user, group, icon
+        # Generate a deterministic but randomized port between 1024 and 65535
+        port = 1024 + (seed % (65535 - 1024 + 1))
+
+        return name, host, user, group, icon, port
 
     def closeEvent(self, event):
         """Handle window close event to save settings."""

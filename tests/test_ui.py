@@ -218,6 +218,33 @@ class TestMainWindow:
         assert group_item.text(0) == "Real Group"
         assert conn_item.text(0) == "Real Server"
 
+    def test_incognito_mode_port_randomization(self, window, temp_storage, qtbot: QtBot):
+        """Test that incognito mode randomizes ports."""
+        # Add connection with standard SSH port
+        conn = SSHConnection(name="Test Server", host="example.com", user="testuser", port=22)
+        temp_storage.add_connection(conn)
+        window._load_connections()
+
+        # Toggle incognito mode
+        window._toggle_incognito_mode()
+
+        # Re-fetch item from tree
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+
+        # Port should be randomized (not 22)
+        randomized_port = int(conn_item.text(3))
+        assert randomized_port != 22
+        assert 1024 <= randomized_port <= 65535
+
+        # Toggle off and back on to check determinism
+        window._toggle_incognito_mode()
+        window._toggle_incognito_mode()
+
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+        assert int(conn_item.text(3)) == randomized_port
+
 
 class TestAddConnectionDialog:
     """Test cases for AddConnectionDialog."""
