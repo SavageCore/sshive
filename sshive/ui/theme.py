@@ -96,6 +96,17 @@ class ThemeManager:
             QTreeView::item:hover {
                 background-color: #404040;
             }
+            QLineEdit {
+                padding: 4px 8px;
+                border: 1px solid #505050;
+                border-radius: 4px;
+                background-color: #3d3d3d;
+                color: #ffffff;
+                selection-background-color: #505050;
+            }
+            QLineEdit:focus {
+                border-color: #4282da;
+            }
             QToolButton {
             }
             QPushButton {

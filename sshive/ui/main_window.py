@@ -5,6 +5,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -72,6 +73,17 @@ class MainWindow(QMainWindow):
 
         # Top options layout
         top_layout = QHBoxLayout()
+
+        # Search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search connections...")
+        self.search_bar.setClearButtonEnabled(True)
+        self.search_bar.setFixedWidth(300)
+        search_icon = qta.icon("fa5s.search", color=self.icon_color)
+        self.search_bar.addAction(search_icon, QLineEdit.ActionPosition.LeadingPosition)
+        self.search_bar.textChanged.connect(self._on_search_text_changed)
+        top_layout.addWidget(self.search_bar)
+
         top_layout.addStretch()
 
         # View options (eye menu)
@@ -81,7 +93,6 @@ class MainWindow(QMainWindow):
         self.view_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.view_btn.setToolTip("Column Visibility")
         self.view_btn.setStyleSheet("border: none; padding: 4px;")
-        self.view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.view_menu = QMenu(self.view_btn)
@@ -262,6 +273,35 @@ class MainWindow(QMainWindow):
             self.tree.setCursor(Qt.CursorShape.PointingHandCursor)
         else:
             self.tree.setCursor(Qt.CursorShape.ArrowCursor)
+
+    def _on_search_text_changed(self, text: str):
+        """Filter tree items based on search text."""
+        text = text.lower()
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            item = it.value()
+            connection = item.data(0, Qt.ItemDataRole.UserRole)
+
+            if connection:
+                # It's a connection item
+                matches = text in connection.name.lower() or text in connection.host.lower()
+                item.setHidden(not matches)
+
+                # If matches, we need to make sure all parents are visible
+                if matches:
+                    parent = item.parent()
+                    while parent:
+                        parent.setHidden(False)
+                        parent = parent.parent()
+            else:
+                # It's a group item - initially hide it, it will be shown if children match
+                # BUT if search is empty, show everything
+                if not text:
+                    item.setHidden(False)
+                else:
+                    item.setHidden(True)
+
+            it += 1
 
     def _on_selection_changed(self):
         """Handle tree selection changes."""
