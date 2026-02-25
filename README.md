@@ -25,8 +25,10 @@ Organize your SSH connections into groups, double-click to connect, and never ty
 
 ## Requirements
 
-- Python 3.10+
 - [uv](https://github.com/astral-sh/uv) (recommended) or pip
+- **Optional Dependencies** (for specific features):
+  - `sshpass`: For password authentication (Linux/macOS)
+  - `putty-tools` / `puttygen`: For PPK key support
 
 ## Installation
 
@@ -125,19 +127,30 @@ uv run pytest tests/test_models.py
 uv run ptw
 ```
 
+### Native Linux Packages (Recommended)
+
+SSHive is also available as native packages for various Linux distributions:
+
+- **Debian/Ubuntu**: `.deb` package
+- **Fedora/RHEL**: `.rpm` package
+- **Arch Linux**: `PKGBUILD`
+- **Flatpak**: `org.sshive.SSHive`
+
+See the [Quick Start Guide](QUICKSTART.md) or [Releases page](https://github.com/SavageCore/sshive/releases) for download and installation instructions.
+
 ### Using Makefile
 
-Common development tasks:
+Common development and packaging tasks:
 
 ```bash
 make help        # Show all commands
-make sync        # Install/sync dependencies
+make run         # Run SSHive locally
 make test        # Run tests
-make test-cov    # Run tests with coverage
-make lint        # Check code
+make lint        # Check code quality
 make format      # Format code
-make fix         # Fix all issues
-make run         # Run SSHive
+make deb         # Build .deb package (requires nfpm)
+make rpm         # Build .rpm package (requires nfpm)
+make flatpak     # Build Flatpak (requires flatpak-builder)
 make clean       # Clean build artifacts
 ```
 
@@ -331,14 +344,27 @@ Then restart SSHive and/or KDE Plasma. See `ICON_INSTALLATION.md` for details.
 
 ```bash
 # Ubuntu/Debian
-sudo apt install konsole
+sudo apt install konsole sshpass putty-tools
 
 # Fedora/RHEL
-sudo dnf install konsole
+sudo dnf install konsole sshpass putty
+
+# Arch Linux
+sudo pacman -S konsole sshpass putty
 
 # macOS (via Homebrew)
 brew install --cask iterm2
+brew install sshpass putty
 ```
+
+**Note for Windows:**
+
+- For **PPK** support, ensure `puttygen` is in your PATH (usually installed with PuTTY).
+- For **Password** authentication:
+  - Install [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) (provides `plink.exe`) or [KiTTY](http://www.9bis.net/kitty/) (provides `klink.exe`).
+  - Ensure the executable is in your PATH.
+  - SSHive will automatically detect and use these to provide password support.
+  - Alternatively, use SSH keys (recommended) or run SSHive within **WSL**.
 
 ### Connection Fails
 

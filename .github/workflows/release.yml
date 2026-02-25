@@ -7,25 +7,78 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    name: build and release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
     steps:
       - uses: actions/checkout@v6
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
+
       - name: Set up Python
         run: uv python install
+
       - name: Install dependencies
         run: uv sync --all-extras --dev
-      - name: Build executable
-        run: make dist
-      - name: Archive executable
+
+      # Linux-specific build (deb/rpm)
+      - name: Build Linux packages
+        if: matrix.os == 'ubuntu-latest'
         run: |
+          curl -sfL https://install.goreleaser.com/github.com/goreleaser/nfpm.sh | sh
+          ./bin/nfpm pkg --target dist/
+
+      # Windows-specific build (custom PyInstaller)
+      - name: Install MinGW (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install mingw --yes --force
+
+      - name: Add MinGW to PATH (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $mingwPath = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+          echo "$mingwPath" >> $env:GITHUB_PATH
+
+      - name: Download and Compile PyInstaller (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          git clone https://github.com/pyinstaller/pyinstaller.git
+          cd pyinstaller/bootloader
+          python waf distclean
+          python waf configure --gcc
+          python waf all --target-arch=64bit
+          cd ..
+          uv pip install .
+
+      - name: Build Windows Executable
+        if: matrix.os == 'windows-latest'
+        run: uv run pyinstaller --clean sshive.spec
+
+      # macOS-specific build
+      - name: Build macOS App Bundle
+        if: matrix.os == 'macos-latest'
+        run: |
+          uv run pyinstaller --clean sshive.spec
           cd dist
-          tar -czvf sshive-linux-x64.tar.gz sshive
+          zip -r sshive.app.zip sshive.app
+
+      # Create/Update Release
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/sshive-linux-x64.tar.gz
+          files: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.exe
+            dist/*.app.zip
           generate_release_notes: true
+          fail_on_unmatched_files: false

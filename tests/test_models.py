@@ -71,6 +71,7 @@ class TestSSHConnection:
             user="testuser",
             port=2222,
             key_path="~/.ssh/id_rsa",
+            password="testpass",
             group="Work",
         )
 
@@ -80,6 +81,8 @@ class TestSSHConnection:
         assert data["host"] == "example.com"
         assert data["user"] == "testuser"
         assert data["port"] == 2222
+        assert data["key_path"] == conn.key_path
+        assert data["password"] == "testpass"
         assert data["group"] == "Work"
         assert data["id"] is not None
 
@@ -92,6 +95,7 @@ class TestSSHConnection:
             "user": "testuser",
             "port": 2222,
             "key_path": "~/.ssh/id_rsa",
+            "password": "testpass",
             "group": "Work",
         }
 
@@ -102,6 +106,7 @@ class TestSSHConnection:
         assert conn.host == "example.com"
         assert conn.user == "testuser"
         assert conn.port == 2222
+        assert conn.password == "testpass"
         assert conn.group == "Work"
 
     def test_get_ssh_command_basic(self):

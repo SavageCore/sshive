@@ -1,11 +1,15 @@
 """Main application window."""
 
+import hashlib
+import json
+import uuid
 from pathlib import Path
 
 import qtawesome as qta
 from PySide6.QtCore import QSettings, QStandardPaths, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLineEdit,
     QMainWindow,
@@ -25,6 +29,7 @@ from sshive.models.storage import ConnectionStorage
 from sshive.ssh.launcher import SSHLauncher
 from sshive.ui.add_dialog import AddConnectionDialog
 from sshive.ui.icon_manager import IconManager
+from sshive.ui.settings_dialog import SettingsDialog
 from sshive.ui.theme import ThemeManager
 
 
@@ -90,20 +95,16 @@ class MainWindow(QMainWindow):
 
         top_layout.addStretch()
 
-        # View options (eye menu)
-        view_icon = qta.icon("fa5s.eye", color=self.icon_color)
-        self.view_btn = QToolButton()
-        self.view_btn.setIcon(view_icon)
-        self.view_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.view_btn.setToolTip("Column Visibility")
-        self.view_btn.setStyleSheet("border: none; padding: 4px;")
-        self.view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Settings button (cog)
+        settings_icon = qta.icon("fa5s.cog", color=self.icon_color)
+        self.settings_btn = QToolButton()
+        self.settings_btn.setIcon(settings_icon)
+        self.settings_btn.setToolTip("Settings")
+        self.settings_btn.setStyleSheet("border: none; padding: 4px;")
+        self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_btn.clicked.connect(self._show_settings_dialog)
 
-        self.view_menu = QMenu(self.view_btn)
-        self.view_btn.setMenu(self.view_menu)
-        self.view_menu.aboutToShow.connect(self._populate_view_menu)
-
-        top_layout.addWidget(self.view_btn)
+        top_layout.addWidget(self.settings_btn)
         layout.addLayout(top_layout)
 
         # Icons for later use
@@ -184,6 +185,16 @@ class MainWindow(QMainWindow):
         # Enable column reordering
         self.tree.header().setSectionsMovable(True)
 
+        # Status overlay for long actions
+        self._status_msg = None
+
+    def _show_status(self, message: str):
+        """Show a temporarily status message (simple msg box or overlay)."""
+        # For now we'll just use the status bar if we had one,
+        # but we'll print it to avoid blocking.
+        # A more complex UI might use a progress dialog.
+        print(f"Status: {message}")
+
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts."""
         self.incognito_action = QAction("Toggle Incognito Mode", self)
@@ -212,7 +223,6 @@ class MainWindow(QMainWindow):
 
     def _load_or_generate_incognito_connections(self) -> list[SSHConnection]:
         """Load fake connections from file or generate them deterministically."""
-        import json
 
         # Try to load from incognito-connections.json in the same dir as the app config
         config_dir = Path(
@@ -281,7 +291,7 @@ class MainWindow(QMainWindow):
 
     def _get_fake_data(
         self, connection_id: str, service_index: int | None = None
-    ) -> tuple[str, str, str, str, str]:
+    ) -> tuple[str, str, str, str, str, int]:
         """Generate deterministic fake data based on connection ID.
 
         Args:
@@ -291,7 +301,6 @@ class MainWindow(QMainWindow):
         Returns:
             Tuple of (name, host, user, group, icon, port)
         """
-        import hashlib
 
         seed = int(hashlib.md5(connection_id.encode()).hexdigest(), 16)
 
@@ -554,7 +563,6 @@ class MainWindow(QMainWindow):
 
         # Create a new connection based on the existing one with a fresh ID
         # This prevents duplicate IDs in the storage
-        import uuid
 
         new_connection = SSHConnection(
             name=f"{connection.name} (Copy)",
@@ -648,17 +656,35 @@ class MainWindow(QMainWindow):
         if not connection:
             return  # Clicked on group, not connection
 
-        # Test connection validity
-        if not SSHLauncher.test_connection(connection):
+        # Test connection validity (dependency/path checks)
+        success, error_msg = SSHLauncher.test_connection(connection)
+        if not success:
             QMessageBox.warning(
                 self,
                 "Connection Error",
-                f"Cannot connect to {connection.name}.\n\n"
-                f"Possible issues:\n"
-                f"• SSH command not found\n"
-                f"• SSH key file doesn't exist: {connection.key_path or 'N/A'}",
+                f"Cannot connect to {connection.name}.\n\n{error_msg}",
             )
             return
+
+        # Background credential check if password/key provided
+        verify_credentials = self.settings.value("verify_credentials", "true") == "true"
+        if verify_credentials and (connection.password or connection.key_path):
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                # Force a UI update to show the cursor
+                QApplication.processEvents()
+
+                auth_success, auth_error = SSHLauncher.check_credentials(connection)
+                if not auth_success:
+                    QApplication.restoreOverrideCursor()
+                    QMessageBox.critical(
+                        self,
+                        "Authentication Failed",
+                        f"Failed to authenticate for {connection.name}.\n\n{auth_error}",
+                    )
+                    return
+            finally:
+                QApplication.restoreOverrideCursor()
 
         # Launch connection
         success = SSHLauncher.launch(connection)
@@ -720,18 +746,26 @@ class MainWindow(QMainWindow):
 
         menu.exec(self.tree.header().mapToGlobal(position))
 
-    def _populate_view_menu(self):
-        """Populate the view options menu with column toggles."""
-        self.view_menu.clear()
-
+    def _show_settings_dialog(self):
+        """Show the settings dialog."""
         header_item = self.tree.headerItem()
+        column_names = [header_item.text(i) for i in range(self.tree.columnCount())]
+        hidden_columns = [
+            i for i in range(1, self.tree.columnCount()) if self.tree.isColumnHidden(i)
+        ]
 
-        for i in range(1, self.tree.columnCount()):
-            name = header_item.text(i)
-            action = QAction(name, self.view_menu)
-            action.setCheckable(True)
-            action.setChecked(not self.tree.isColumnHidden(i))
-            action.triggered.connect(
-                lambda checked, idx=i: self.tree.setColumnHidden(idx, not checked)
+        dialog = SettingsDialog(self, self.settings, column_names, hidden_columns)
+        if dialog.exec():
+            settings = dialog.get_settings()
+
+            # Update verification setting
+            self.settings.setValue(
+                "verify_credentials", str(settings["verify_credentials"]).lower()
             )
-            self.view_menu.addAction(action)
+
+            # Update column visibility
+            for idx, visible in settings["column_visibility"].items():
+                self.tree.setColumnHidden(idx, not visible)
+
+            # Save column state
+            self.settings.setValue("columnState", self.tree.header().saveState())

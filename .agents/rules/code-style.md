@@ -1,4 +1,6 @@
-## Code Style
+---
+trigger: always_on
+---
 
 Use `make` commands (via `uv run` internally):
 
@@ -11,15 +13,4 @@ Use `make` commands (via `uv run` internally):
 
 > Import sorting is configured in `pyproject.toml` (`select = ["I"]`), so `make fix` handles imports automatically.
 
-## Testing
-
-- Run tests: `make test`
-- Run tests with coverage: `make test-cov`
-- Run tests in watch mode: `make test-watch`
-- Always create comprehensive `pytest` tests for any changes made, covering edge cases where possible.
-
-## Common Workflows
-
-- Full workflow (sync, fix, test): `make all`
-- Install dependencies: `make install`
-- Install with dev dependencies: `make dev`
+- All imports MUST be at the top of files. Never use inline imports within functions or methods.

@@ -136,3 +136,10 @@ Thumbs.db
 
 # Icons
 *.af~lock*
+
+# Flatpak
+.flatpak-builder/
+.flatpak-dev-src/
+build-dir/
+flatpak-build-dir-dev/
+python3-modules.json

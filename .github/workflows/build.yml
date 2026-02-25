@@ -9,20 +9,93 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
     steps:
       - uses: actions/checkout@v6
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
+
       - name: Set up Python
         run: uv python install
+
       - name: Install dependencies
         run: uv sync --all-extras --dev
-      - name: Build executable
-        run: make dist
-      - name: Upload artifact
+
+      # Linux-specific build (deb/rpm)
+      - name: Build Linux packages
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          curl -sfL https://install.goreleaser.com/github.com/goreleaser/nfpm.sh | sh
+          ./bin/nfpm pkg --target dist/
+
+      # Windows-specific build (custom PyInstaller)
+      - name: Install MinGW (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install mingw --yes --force
+
+      - name: Add MinGW to PATH (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $mingwPath = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+          echo "$mingwPath" >> $env:GITHUB_PATH
+
+      - name: Download and Compile PyInstaller (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          git clone https://github.com/pyinstaller/pyinstaller.git
+          cd pyinstaller/bootloader
+          python waf distclean
+          python waf configure --gcc
+          python waf all --target-arch=64bit
+          cd ..
+          uv pip install .
+
+      - name: Build Windows Executable
+        if: matrix.os == 'windows-latest'
+        run: uv run pyinstaller --clean sshive.spec
+
+      # macOS-specific build
+      - name: Build macOS App Bundle
+        if: matrix.os == 'macos-latest'
+        run: |
+          uv run pyinstaller --clean sshive.spec
+          cd dist
+          zip -r sshive.app.zip sshive.app
+
+      # Upload artifacts
+      - name: Upload Linux Artifacts (.deb)
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v6
         with:
-          name: sshive
-          path: dist/sshive
-          if-no-files-found: error
+          name: sshive-deb
+          path: dist/*.deb
+
+      - name: Upload Linux Artifacts (.rpm)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v6
+        with:
+          name: sshive-rpm
+          path: dist/*.rpm
+
+      - name: Upload Windows Artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v6
+        with:
+          name: sshive-windows
+          path: dist/*.exe
+
+      - name: Upload macOS Artifact
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v6
+        with:
+          name: sshive-macos
+          path: dist/*.app.zip

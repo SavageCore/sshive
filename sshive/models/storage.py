@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from PySide6.QtCore import QStandardPaths
+
 from sshive.models.connection import SSHConnection
 
 
@@ -34,11 +36,10 @@ class ConnectionStorage:
     @staticmethod
     def _get_default_config_path() -> Path:
         """Get platform-specific config file path."""
-        if Path.home().joinpath(".config").exists():  # Linux/macOS
-            return Path.home() / ".config" / "sshive" / "connections.json"
-        else:  # Windows
-            appdata = Path.home() / "AppData" / "Roaming"
-            return appdata / "sshive" / "connections.json"
+        config_dir = Path(
+            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)
+        )
+        return config_dir / "connections.json"
 
     def load_connections(self) -> list[SSHConnection]:
         """Load all connections from storage.
