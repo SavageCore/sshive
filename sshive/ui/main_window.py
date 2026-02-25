@@ -1,7 +1,9 @@
 """Main application window."""
 
+from pathlib import Path
+
 import qtawesome as qta
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, QStandardPaths, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -39,7 +41,9 @@ class MainWindow(QMainWindow):
         # Determine icon color based on theme
         self.icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
 
+        self.incognito_mode = False
         self._setup_ui()
+        self._setup_shortcuts()
 
         self.icon_manager = IconManager.instance()
         self.icon_manager.icon_loaded.connect(self._on_icon_loaded)
@@ -49,7 +53,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SSHive - SSH Connection Manager")
 
         # Restore window state and geometry
-        self.settings = QSettings("SSHive", "SSHive")
+        self.settings = QSettings("sshive", "sshive")
 
         # Note: on Wayland, restoreGeometry will typically only restore the window size,
         # as the compositor restricts applications from setting their own position.
@@ -180,6 +184,194 @@ class MainWindow(QMainWindow):
         # Enable column reordering
         self.tree.header().setSectionsMovable(True)
 
+    def _setup_shortcuts(self):
+        """Setup keyboard shortcuts."""
+        self.incognito_action = QAction("Toggle Incognito Mode", self)
+        self.incognito_action.setShortcut("Ctrl+I")
+        self.incognito_action.triggered.connect(self._toggle_incognito_mode)
+        self.addAction(self.incognito_action)
+
+    def _toggle_incognito_mode(self):
+        """Toggle obfuscation of server list by swapping connection sets."""
+        self.incognito_mode = not self.incognito_mode
+
+        if self.incognito_mode:
+            # Backup real connections
+            self._real_connections = self.connections.copy()
+
+            # Load or generate fake connections
+            self.connections = self._load_or_generate_incognito_connections()
+        else:
+            # Restore real connections
+            if hasattr(self, "_real_connections"):
+                self.connections = self._real_connections
+
+        self._populate_tree()
+
+    INCOGNITO_VERSION = 2
+
+    def _load_or_generate_incognito_connections(self) -> list[SSHConnection]:
+        """Load fake connections from file or generate them deterministically."""
+        import json
+
+        # Try to load from incognito-connections.json in the same dir as the app config
+        config_dir = Path(
+            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)
+        )
+        incognito_path = config_dir / "incognito-connections.json"
+
+        if incognito_path.exists():
+            try:
+                with open(incognito_path) as f:
+                    data = json.load(f)
+
+                    # Version check to force re-generation if logic changes
+                    if isinstance(data, dict) and data.get("version") == self.INCOGNITO_VERSION:
+                        return [SSHConnection.from_dict(conn) for conn in data["connections"]]
+
+                    # If it's a list (old format) or wrong version, it will fall through to re-generate
+            except Exception as e:
+                print(f"Failed to load incognito connections: {e}")
+
+        # Fallback: generate deterministically from real connections
+        fake_conns = []
+        used_identities = set()
+
+        for i, conn in enumerate(self.connections):
+            # Pass index i to ensure we cycles through services correctly
+            name, host, user, group, icon = self._get_fake_data(conn.id, service_index=i)
+
+            # If identity already used (unlikely with new IP logic but stay safe), try to vary it
+            counter = 1
+            while (name, host) in used_identities and counter < 10:
+                name, host, user, group, icon = self._get_fake_data(
+                    f"{conn.id}-{counter}", service_index=i + counter
+                )
+                counter += 1
+
+            used_identities.add((name, host))
+
+            fake_conn = SSHConnection(
+                name=name,
+                host=host,
+                user=user,
+                port=conn.port,
+                group=group,
+                icon=icon,
+                id=conn.id,
+            )
+            fake_conns.append(fake_conn)
+
+        # Save generated ones for consistency/user customization
+        try:
+            config_dir.mkdir(parents=True, exist_ok=True)
+            output_data = {
+                "version": self.INCOGNITO_VERSION,
+                "connections": [c.to_dict() for c in fake_conns],
+            }
+            with open(incognito_path, "w") as f:
+                json.dump(output_data, f, indent=4)
+        except Exception as e:
+            print(f"Failed to save incognito connections: {e}")
+
+        return fake_conns
+
+    def _get_fake_data(
+        self, connection_id: str, service_index: int | None = None
+    ) -> tuple[str, str, str, str, str]:
+        """Generate deterministic fake data based on connection ID.
+
+        Args:
+            connection_id: Unique identifier for the connection
+            service_index: Optional index to force a specific service selection
+
+        Returns:
+            Tuple of (name, host, user, group, icon)
+        """
+        import hashlib
+
+        seed = int(hashlib.md5(connection_id.encode()).hexdigest(), 16)
+
+        services = [
+            ("Plex", "Media", "plex"),
+            ("Nextcloud", "Storage", "nextcloud"),
+            ("Home Assistant", "Automation", "home-assistant"),
+            ("Pi-hole", "Network", "pi-hole"),
+            ("Portainer", "Docker", "portainer"),
+            ("Uptime Kuma", "Monitoring", "uptime-kuma"),
+            ("Jellyfin", "Media", "jellyfin"),
+            ("AdGuard Home", "Network", "adguard-home"),
+            ("Nginx Proxy Manager", "Network", "nginx-proxy-manager"),
+            ("Vaultwarden", "Security", "bitwarden"),
+            ("Paperless-ngx", "Storage", "paperless-ngx"),
+            ("deluge", "Downloads", "deluge"),
+            ("rtorrent", "Downloads", "rtorrent"),
+            ("Transmission", "Downloads", "transmission"),
+            ("qBittorrent", "Downloads", "qbittorrent"),
+            ("Grafana", "Monitoring", "grafana"),
+            ("Prometheus", "Monitoring", "prometheus"),
+            ("Homebridge", "Automation", "homebridge"),
+            ("FreshRSS", "Media", "freshrss"),
+            ("Mealie", "Storage", "mealie"),
+            ("Ghost", "Web", "ghost"),
+            ("WordPress", "Web", "wordpress"),
+            ("Node-RED", "Automation", "node-red"),
+            ("Mosquitto", "Automation", "mosquitto"),
+            ("TrueNAS Core", "Storage", "truenas"),
+            ("Unraid OS", "Storage", "unraid"),
+            ("Bitwarden", "Security", "bitwarden"),
+            ("Logsnag", "Monitoring", "logsnag"),
+            ("Netdata", "Monitoring", "netdata"),
+            ("Checkmk", "Monitoring", "checkmk"),
+            ("Guacamole", "Network", "guacamole"),
+            ("Tailscale", "Network", "tailscale"),
+            ("WireGuard", "Network", "wireguard"),
+            ("Dozzle", "Docker", "dozzle"),
+            ("Statping", "Monitoring", "statping"),
+            ("Audiobookshelf", "Media", "audiobookshelf"),
+            ("Navidrome", "Media", "navidrome"),
+            ("Sonarr", "Downloads", "sonarr"),
+            ("Radarr", "Downloads", "radarr"),
+            ("Prowlarr", "Downloads", "prowlarr"),
+            ("Overseerr", "Downloads", "overseerr"),
+            ("Bazarr", "Downloads", "bazarr"),
+            ("Gitea", "Web", "gitea"),
+            ("Wiki.js", "Web", "wikijs"),
+            ("Heimdall", "Web", "heimdall"),
+            ("Flame", "Web", "flame"),
+            ("Organizr", "Web", "organizr"),
+        ]
+
+        users = ["admin", "root", "pi", "user", "manager", "maintainer", "sysop", "dev"]
+
+        # Use service_index if provided to ensure distribution, otherwise fallback to seed
+        idx = service_index if service_index is not None else seed
+        service_info = services[idx % len(services)]
+
+        name = service_info[0]
+        group = service_info[1]
+        icon = service_info[2]
+
+        # Generate a realistic-looking local IP randomized by the seed
+        # Use different transformations of the seed to avoid correlations
+        host_byte = (seed >> 16) % 254 + 1
+
+        # Decide between 192.168.x.y, 10.0.x.y, or 172.16.x.y
+        ip_prefix = seed % 3
+        if ip_prefix == 0:
+            subnet = (seed >> 12) % 10  # More variety in subnets
+            host = f"192.168.{subnet}.{host_byte}"
+        elif ip_prefix == 1:
+            subnet = (seed >> 12) % 50
+            host = f"10.0.{subnet}.{host_byte}"
+        else:
+            subnet = (seed >> 12) % 32
+            host = f"172.16.{subnet}.{host_byte}"
+
+        user = users[seed % len(users)]
+
+        return name, host, user, group, icon
+
     def closeEvent(self, event):
         """Handle window close event to save settings."""
         self._save_settings()
@@ -238,6 +430,7 @@ class MainWindow(QMainWindow):
             group_item = group_items[group_name]
             for conn in sorted(grouped_conns[group_name], key=lambda c: c.name):
                 conn_item = QTreeWidgetItem(group_item)
+
                 conn_item.setText(0, conn.name)
                 conn_item.setText(1, conn.host)
                 conn_item.setText(2, conn.user)
@@ -254,7 +447,10 @@ class MainWindow(QMainWindow):
                     conn_item.setIcon(0, server_icon)
 
                 conn_item.setData(0, Qt.ItemDataRole.UserRole, conn)
-                conn_item.setToolTip(0, str(conn))
+                if self.incognito_mode:
+                    conn_item.setToolTip(0, "Incognito mode active")
+                else:
+                    conn_item.setToolTip(0, str(conn))
 
     def _on_icon_loaded(self, name: str, path: str):
         """Handle icon loaded signal and update tree items."""

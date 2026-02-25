@@ -157,6 +157,67 @@ class TestMainWindow:
         assert cloned_conn_captured[0].id in ids
         assert len(set(ids)) == 2
 
+    def test_incognito_mode_obfuscation(self, window, temp_storage, qtbot: QtBot):
+        """Test that incognito mode swaps entire connections list with fake data."""
+        # Add connection
+        conn = SSHConnection(
+            name="Real Server", host="real-host.com", user="realuser", group="Real Group"
+        )
+        temp_storage.add_connection(conn)
+        window._load_connections()
+
+        # Select the connection
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+
+        # Initially real data
+        assert group_item.text(0) == "Real Group"
+        assert conn_item.text(0) == "Real Server"
+
+        # Toggle incognito mode
+        window._toggle_incognito_mode()
+
+        # CRITICAL: Previous items are now invalidated because tree was cleared
+        # Re-fetch them
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+
+        # Now fake data
+        assert group_item.text(0) != "Real Group"
+        assert conn_item.text(0) != "Real Server"
+        assert any(
+            s in conn_item.text(0)
+            for s in [
+                "Plex",
+                "Nextcloud",
+                "Home Assistant",
+                "Pi-hole",
+                "Portainer",
+                "Uptime",
+                "Jellyfin",
+                "AdGuard",
+                "Nginx",
+                "Vaultwarden",
+                "Paperless",
+                "Transmission",
+                "qBittorrent",
+                "Grafana",
+                "Prometheus",
+            ]
+        )
+        assert conn_item.toolTip(0) == "Incognito mode active"
+
+        # Toggle back
+        window._toggle_incognito_mode()
+
+        # Re-fetch again
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+
+        # Real data again
+        assert group_item.text(0) == "Real Group"
+        assert conn_item.text(0) == "Real Server"
+
 
 class TestAddConnectionDialog:
     """Test cases for AddConnectionDialog."""

@@ -32,10 +32,10 @@ def main():
     app.setStyle("Fusion")
 
     # Set application metadata
-    app.setApplicationName("SSHive")
+    app.setApplicationName("sshive")
     app.setDesktopFileName("sshive")
-    app.setOrganizationName("SSHive")
-    app.setApplicationVersion("0.1.0")
+    app.setOrganizationName("sshive")
+    app.setApplicationVersion("0.0.0")
 
     # Set application icon
     icon_path = get_resource_path("icon.png")

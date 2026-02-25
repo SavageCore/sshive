@@ -20,6 +20,9 @@ Organize your SSH connections into groups, double-click to connect, and never ty
 - 🖥️ **Cross-platform** - works on Linux, macOS, and Windows (WSL)
 - 🔍 **Smart terminal detection** - auto-detects konsole, gnome-terminal, alacritty, etc.
 
+![SSHive Dark Mode](previews/dark.png)
+![SSHive Light Mode](previews/light.png)
+
 ## Requirements
 
 - Python 3.10+
