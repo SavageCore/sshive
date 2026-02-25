@@ -64,6 +64,9 @@ lock:  ## Update lock file
 
 all: dev fix test  ## Complete workflow: sync, fix, test
 
+version: ## Bump version (usage: make version v=0.1.0)
+	uv run python scripts/bump_version.py $(v)
+
 # Packaging targets
 package-prep:  ## Prepare packaging root
 	rm -rf dist/package-root
