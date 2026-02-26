@@ -51,6 +51,14 @@ jobs:
           target: dist/
           config: nfpm.yml
 
+      - name: Build Flatpak
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub --repo=flatpak-repo --force-clean build-dir org.sshive.SSHive.json
+          flatpak build-bundle flatpak-repo dist/SSHive.flatpak org.sshive.SSHive
+
       # Windows-specific build (custom PyInstaller)
       - name: Install MinGW (Windows)
         if: matrix.os == 'windows-latest'
@@ -116,6 +124,13 @@ jobs:
         with:
           name: sshive-appimage
           path: dist/*.AppImage
+
+      - name: Upload Linux Artifacts (.flatpak)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v6
+        with:
+          name: sshive-flatpak
+          path: dist/*.flatpak
 
       - name: Upload Windows Artifact
         if: matrix.os == 'windows-latest'

@@ -51,6 +51,14 @@ jobs:
           target: dist/
           config: nfpm.yml
 
+      - name: Build Flatpak
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub --repo=flatpak-repo --force-clean build-dir org.sshive.SSHive.json
+          flatpak build-bundle flatpak-repo dist/SSHive.flatpak org.sshive.SSHive
+
       # Windows-specific build (custom PyInstaller)
       - name: Install MinGW (Windows)
         if: matrix.os == 'windows-latest'
@@ -96,7 +104,7 @@ jobs:
           zip -r sshive.app.zip sshive.app
 
       # Create/Update Release
-      - name: Create Release
+      - name: Create Release (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         uses: softprops/action-gh-release@v2
         with:
@@ -106,5 +114,20 @@ jobs:
             dist/*.AppImage
             dist/sshive/*.exe
             dist/*.app.zip
+            dist/*.flatpak
           generate_release_notes: true
+          fail_on_unmatched_files: false
+
+      - name: Upload Release Artifacts (Other OS)
+        if: matrix.os != 'ubuntu-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+            dist/sshive/*.exe
+            dist/*.app.zip
+            dist/*.flatpak
+          generate_release_notes: false
           fail_on_unmatched_files: false
