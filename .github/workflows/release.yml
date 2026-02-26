@@ -97,6 +97,7 @@ jobs:
 
       # Create/Update Release
       - name: Create Release
+        if: matrix.os == 'ubuntu-latest'
         uses: softprops/action-gh-release@v2
         with:
           files: |
