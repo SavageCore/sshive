@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from pytestqt.qtbot import QtBot
@@ -10,6 +11,7 @@ from sshive.models.connection import SSHConnection
 from sshive.models.storage import ConnectionStorage
 from sshive.ui.add_dialog import AddConnectionDialog
 from sshive.ui.main_window import MainWindow
+from sshive.ui.settings_dialog import SettingsDialog, _get_available_languages
 
 
 class TestMainWindow:
@@ -369,3 +371,100 @@ class TestAddConnectionDialog:
         assert "Work" in items
         assert "Personal" in items
         assert "Development" in items
+
+
+class TestSettingsDialog:
+    """Test cases for SettingsDialog language selection."""
+
+    @pytest.fixture
+    def mock_i18n_dir(self, tmp_path):
+        """Create a temp i18n directory with mock .qm files."""
+        i18n_dir = tmp_path / "i18n"
+        i18n_dir.mkdir()
+        (i18n_dir / "en.qm").touch()
+        (i18n_dir / "nl.qm").touch()
+        return i18n_dir
+
+    @pytest.fixture
+    def mock_settings(self):
+        """Create a mock QSettings object."""
+        settings = MagicMock()
+        settings.value.side_effect = lambda key, default=None: default
+        return settings
+
+    @pytest.fixture
+    def dialog(self, qtbot: QtBot, mock_settings, mock_i18n_dir):
+        """Create a SettingsDialog for testing."""
+        dlg = SettingsDialog(
+            settings=mock_settings,
+            column_names=["Name", "Host", "User", "Port"],
+            hidden_columns=[],
+            i18n_dir=mock_i18n_dir,
+        )
+        qtbot.addWidget(dlg)
+        return dlg
+
+    def test_get_available_languages_includes_system(self, mock_i18n_dir):
+        """'system' entry is always first in the language list."""
+        langs = _get_available_languages(i18n_dir=mock_i18n_dir)
+        assert langs[0][0] == "system"
+        assert "System" in langs[0][1]
+
+    def test_get_available_languages_includes_qm_files(self, mock_i18n_dir):
+        """Available languages include entries for each .qm file present."""
+        langs = _get_available_languages(i18n_dir=mock_i18n_dir)
+        codes = [code for code, _ in langs]
+        assert "en" in codes
+        assert "nl" in codes
+
+    def test_lang_combo_exists(self, dialog):
+        """Language combo box is present in the settings dialog."""
+        assert dialog.lang_combo is not None
+
+    def test_default_language_is_system(self, dialog):
+        """When no language is saved, 'system' is selected."""
+        assert dialog.lang_combo.currentData() == "system"
+
+    def test_saved_language_is_pre_selected(self, qtbot: QtBot, mock_settings, mock_i18n_dir):
+        """When a language is already saved it is pre-selected in the combo."""
+        mock_settings.value.side_effect = lambda key, default=None: (
+            "nl" if key == "language" else default
+        )
+        dlg = SettingsDialog(
+            settings=mock_settings,
+            column_names=["Name"],
+            hidden_columns=[],
+            i18n_dir=mock_i18n_dir,
+        )
+        qtbot.addWidget(dlg)
+        assert dlg.lang_combo.currentData() == "nl"
+
+    def test_get_settings_returns_language_code(self, dialog):
+        """get_settings() includes the selected language code."""
+        result = dialog.get_settings()
+        assert "language" in result
+        assert result["language"] == "system"
+
+    def test_restart_label_hidden_by_default(self, dialog):
+        """Restart warning label is hidden when dialog opens."""
+        assert dialog.lang_restart_label.isHidden()
+
+    def test_restart_label_shown_on_change(self, dialog):
+        """Restart warning appears when a different language is selected."""
+        # Find an index that is NOT the current one
+        current_index = dialog.lang_combo.currentIndex()
+        other_index = 0 if current_index != 0 else 1
+        if dialog.lang_combo.count() > 1:
+            dialog.lang_combo.setCurrentIndex(other_index)
+            assert not dialog.lang_restart_label.isHidden()
+
+    def test_restart_label_hidden_when_reverted(self, dialog):
+        """Restart warning hides again if user selects the originally saved language."""
+        if dialog.lang_combo.count() > 1:
+            original_index = dialog.lang_combo.currentIndex()
+            # Change to another language
+            dialog.lang_combo.setCurrentIndex(1 if original_index == 0 else 0)
+            assert not dialog.lang_restart_label.isHidden()
+            # Revert
+            dialog.lang_combo.setCurrentIndex(original_index)
+            assert dialog.lang_restart_label.isHidden()

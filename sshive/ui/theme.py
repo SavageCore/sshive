@@ -1,6 +1,7 @@
 """Theme management for dark/light mode."""
 
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
 
 
@@ -14,8 +15,6 @@ class ThemeManager:
         Returns:
             True if dark mode is active
         """
-        from PySide6.QtCore import Qt
-        from PySide6.QtGui import QGuiApplication
 
         # 1. Try Qt 6.5+ style hints (most reliable)
         try:

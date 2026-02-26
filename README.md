@@ -143,8 +143,22 @@ make run
 # Run the test suite
 make test
 
-# Format and lint code
 make fix
+
+### Internationalization (i18n)
+To extract translation strings for localization, you need the `pyside6-tools` package (provides `pyside6-lupdate`).
+
+```
+Install using a package manager:
+```bash
+sudo apt install pyside6-tools   # Debian/Ubuntu
+sudo dnf install pyside6-tools   # Fedora
+```
+Then run:
+```bash
+make i18n
+```
+This will generate/update translation source files in `sshive/i18n/` and then compile to `.qm`.
 ```
 
 ### Building Packages

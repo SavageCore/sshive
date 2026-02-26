@@ -13,6 +13,7 @@ class IconManager(QObject):
 
     # Signal emitted when an icon is loaded: (name, icon_path)
     icon_loaded = Signal(str, str)
+    icon_failed = Signal(str)  # name
 
     BASE_URL = "https://cdn.jsdelivr.net/gh/selfhst/icons/webp"
     MANIFEST_URL = "https://raw.githubusercontent.com/selfhst/icons/main/index.json"
@@ -157,6 +158,14 @@ class IconManager(QObject):
         """Internal slot for icon download completion."""
         reply = self.sender()
         name = reply.property("icon_name")
+
+        if (
+            reply.error() != QNetworkReply.NetworkError.NoError
+            or reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute) != 200
+        ):
+            self.icon_failed.emit(name)
+            return
+
         path = Path(reply.property("icon_path"))
         self._on_icon_downloaded(reply, name, path)
 
