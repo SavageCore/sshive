@@ -82,10 +82,10 @@ package-prep:  ## Prepare packaging root
 	chmod +x dist/package-root/usr/bin/sshive
 
 deb: package-prep ## Build .deb package using nfpm
-	nfpm pkg --target dist/sshive.deb
+	nfpm pkg --target dist/sshive.deb --config nfpm.yml
 
 rpm: package-prep ## Build .rpm package using nfpm
-	nfpm pkg --target dist/sshive.rpm
+	nfpm pkg --target dist/sshive.rpm --config nfpm.yml
 
 flatpak-deps: ## Generate Flatpak dependencies
 	uv run --with requirements-parser python3 scripts/vendor/flatpak-pip-generator.py hatchling "packaging>=24.2" qtawesome --build-only
