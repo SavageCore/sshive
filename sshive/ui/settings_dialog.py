@@ -49,6 +49,11 @@ class SettingsDialog(QDialog):
         verify_val = self.settings.value("verify_credentials", "true")
         self.verify_check.setChecked(verify_val == "true" or verify_val is True)
 
+        self.update_check = QCheckBox("Check for updates on startup")
+        self.update_check.setToolTip("Automatically check for new versions when the app starts.")
+        update_val = self.settings.value("check_updates_startup", "true")
+        self.update_check.setChecked(update_val == "true" or update_val is True)
+
         help_text = QLabel(
             "Prevents terminal flashing by checking credentials first. "
             "Adds a slight delay to connection launch."
@@ -58,6 +63,7 @@ class SettingsDialog(QDialog):
 
         gen_layout.addWidget(self.verify_check)
         gen_layout.addWidget(help_text)
+        gen_layout.addWidget(self.update_check)
 
         # Theme Preference
         theme_label = QLabel("Theme Preference:")
@@ -103,6 +109,7 @@ class SettingsDialog(QDialog):
         """
         return {
             "verify_credentials": self.verify_check.isChecked(),
+            "check_updates_startup": self.update_check.isChecked(),
             "theme_preference": self.theme_combo.currentText(),
             "column_visibility": {idx: check.isChecked() for idx, check in self.col_checks},
         }

@@ -19,6 +19,7 @@ Organize your SSH connections into hierarchical groups, connect with a single cl
 - 🥸 **Incognito Mode:** Press `Ctrl+I` to instantly obfuscate your entire server list with heavily randomized fake data (great for streaming or presenting).
 - 🎨 **Dynamic Icons:** Search and auto-assign self-hosted service icons (powered by selfh.st).
 - 🌓 **Native Theming:** Automatically adapts to your system's dark or light theme using native Fusion styling.
+- 🔄 **Auto-Updates:** Cross-platform update detection ensures you're always running the latest version.
 - 💾 **Portable Storage:** Connections are saved in a simple, portable JSON file (`~/.config/sshive/connections.json`).
 
 ![SSHive Dark Mode](previews/dark.png)

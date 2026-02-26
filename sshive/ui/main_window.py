@@ -25,13 +25,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sshive import __version__
 from sshive.models.connection import SSHConnection
 from sshive.models.storage import ConnectionStorage
 from sshive.ssh.launcher import SSHLauncher
+from sshive.ui.about_dialog import AboutDialog
 from sshive.ui.add_dialog import AddConnectionDialog
 from sshive.ui.icon_manager import IconManager
 from sshive.ui.settings_dialog import SettingsDialog
 from sshive.ui.theme import ThemeManager
+from sshive.ui.update_dialog import UpdateDialog
+from sshive.updater import UpdateChecker
 
 
 class MainWindow(QMainWindow):
@@ -73,6 +77,14 @@ class MainWindow(QMainWindow):
         # which breaks full-width hover highlighting across themes.
         self._update_column_stretch()
 
+        # Update Checker
+        self.updater = UpdateChecker(__version__, self)
+        self.updater.update_available.connect(self._on_update_available)
+
+        # Start background check if enabled
+        if self.settings.value("check_updates_startup", "true") == "true":
+            self.updater.check_for_updates()
+
     def _update_column_stretch(self):
         """Update the stretch mode of the last visible column."""
         header = self.tree.header()
@@ -112,14 +124,71 @@ class MainWindow(QMainWindow):
 
         top_layout.addStretch()
 
-        # Settings button (cog)
-        settings_icon = qta.icon("fa5s.cog", color=self.icon_color)
+        # Update button (hidden by default)
+        self.update_btn = QToolButton()
+        self.update_btn.setText("Update Available!")
+        self.update_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.update_btn.setToolTip("A new version is available! Click to update.")
+
+        self.update_icon_default = qta.icon("fa5s.arrow-alt-circle-up", color="#3498db")
+        self.update_icon_hover = qta.icon("fa5s.arrow-alt-circle-up", color="white")
+        self.update_btn.setIcon(self.update_icon_default)
+
+        self.update_btn.setStyleSheet("""
+            QToolButton {
+                border: 1px solid #3498db;
+                border-radius: 4px;
+                padding: 4px 8px;
+                color: #3498db;
+                font-weight: bold;
+            }
+            QToolButton:hover {
+                background-color: #3498db;
+                color: white;
+            }
+        """)
+        self.update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_btn.setVisible(False)
+        self.update_btn.installEventFilter(self)
+        top_layout.addWidget(self.update_btn)
+
+        # Settings button (bars/burger) - Now a menu
+        settings_icon = qta.icon("fa5s.bars", color=self.icon_color)
         self.settings_btn = QToolButton()
         self.settings_btn.setIcon(settings_icon)
-        self.settings_btn.setToolTip("Settings")
+        self.settings_btn.setToolTip("Options")
         self.settings_btn.setStyleSheet("border: none; padding: 4px;")
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.settings_btn.clicked.connect(self._show_settings_dialog)
+        self.settings_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+
+        self.settings_menu = QMenu(self)
+
+        # Check for Updates action
+        check_updates_icon = qta.icon("fa5s.arrow-alt-circle-up", color=self.icon_color)
+        self.check_updates_action = QAction(check_updates_icon, "Check for Updates", self)
+        self.check_updates_action.setToolTip("Check for new SSHive updates.")
+        self.check_updates_action.triggered.connect(
+            lambda: self.updater.check_for_updates(force=True)
+        )
+        self.settings_menu.addAction(self.check_updates_action)
+
+        self.settings_menu.addSeparator()
+
+        # Settings action
+        settings_icon = qta.icon("fa5s.cog", color=self.icon_color)
+        settings_action = QAction(settings_icon, "Settings", self)
+        settings_action.setToolTip("Configure SSHive settings.")
+        settings_action.triggered.connect(self._show_settings_dialog)
+        self.settings_menu.addAction(settings_action)
+
+        # About action
+        about_icon = qta.icon("fa5s.info-circle", color=self.icon_color)
+        about_action = QAction(about_icon, "About", self)
+        about_action.setToolTip("About SSHive.")
+        about_action.triggered.connect(self._show_about_dialog)
+        self.settings_menu.addAction(about_action)
+
+        self.settings_btn.setMenu(self.settings_menu)
 
         top_layout.addWidget(self.settings_btn)
         layout.addLayout(top_layout)
@@ -792,6 +861,11 @@ class MainWindow(QMainWindow):
                 "verify_credentials", str(settings["verify_credentials"]).lower()
             )
 
+            # Update updater setting
+            self.settings.setValue(
+                "check_updates_startup", str(settings["check_updates_startup"]).lower()
+            )
+
             # Update column visibility
             for idx, visible in settings["column_visibility"].items():
                 self.tree.setColumnHidden(idx, not visible)
@@ -825,7 +899,7 @@ class MainWindow(QMainWindow):
             search_action = self.search_bar.actions()[0]
             search_action.setIcon(qta.icon("fa5s.search", color=self.icon_color))
 
-            self.settings_btn.setIcon(qta.icon("fa5s.cog", color=self.icon_color))
+            self.settings_btn.setIcon(qta.icon("fa5s.bars", color=self.icon_color))
             self.add_btn.setIcon(qta.icon("fa5s.plus", color=self.icon_color))
             self.clone_btn.setIcon(qta.icon("fa5s.clone", color=self.icon_color))
             self.edit_btn.setIcon(qta.icon("fa5s.edit", color=self.icon_color))
@@ -834,3 +908,49 @@ class MainWindow(QMainWindow):
 
             # Repopulate tree to refresh folder/server icons
             self._populate_tree()
+
+    def _on_update_available(self, version, url, notes):
+        """Handle update available signal."""
+        self.check_updates_action.setText(f"Update Available! ({version})")
+        # Ensure it's prominent or we can just keep it in menu
+        # Maybe show the dialog automatically if it's the first time?
+        # For now, just updating the menu item is what was implied.
+
+        # Reconnect triggered to show dialog instead of checking again
+        try:
+            self.check_updates_action.triggered.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        self.check_updates_action.triggered.connect(
+            lambda: self._show_update_dialog(version, url, notes)
+        )
+
+        # Show update button
+        self.update_btn.setText(f"Update Available! ({version})")
+        self.update_btn.setVisible(True)
+
+        # Reconnect clicked to show dialog
+        try:
+            self.update_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        self.update_btn.clicked.connect(lambda: self._show_update_dialog(version, url, notes))
+
+    def eventFilter(self, obj, event):
+        """Swap update button icon on hover for visibility against blue background."""
+        if obj is self.update_btn:
+            if event.type() == event.Type.Enter:
+                self.update_btn.setIcon(self.update_icon_hover)
+            elif event.type() == event.Type.Leave:
+                self.update_btn.setIcon(self.update_icon_default)
+        return super().eventFilter(obj, event)
+
+    def _show_update_dialog(self, version, url, notes):
+        """Show the update information dialog."""
+        dialog = UpdateDialog(version, notes, url, self.updater, self)
+        dialog.exec()
+
+    def _show_about_dialog(self):
+        """Show the about dialog."""
+        dialog = AboutDialog(self)
+        dialog.exec()
