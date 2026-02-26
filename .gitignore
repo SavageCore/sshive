@@ -145,3 +145,6 @@ python3-modules.json
 
 # linuxdeploy
 linuxdeploy*
+
+# i18n
+sshive/i18n/*.qm

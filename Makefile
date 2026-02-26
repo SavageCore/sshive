@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format clean run sync package-prep deb rpm flatpak arch appimage clean-appimage
+.PHONY: help install dev test lint format clean run sync package-prep deb rpm flatpak arch appimage clean-appimage update-i18n compile-i18n i18n
 
 help:  ## Show this help message
 	@echo 'Usage: make [target]'
@@ -68,7 +68,7 @@ version: ## Bump version (usage: make version v=0.1.0)
 	uv run python scripts/bump_version.py $(v)
 
 # Packaging targets
-package-prep:  ## Prepare packaging root
+package-prep: compile-i18n ## Prepare packaging root
 	rm -rf dist/package-root
 	mkdir -p dist/package-root/usr/bin
 	mkdir -p dist/package-root/usr/share/sshive
@@ -151,4 +151,10 @@ clean-appimage: ## Remove build tools and temporary files
 	rm -rf dist/appimage-recipe
 	rm -f SSHive-*.AppImage
 
+update-i18n: ## Extract translation strings for i18n
+	pyside6-lupdate sshive/ui/*.py sshive/ssh/launcher.py -ts sshive/i18n/en.ts
 
+compile-i18n: ## Compile .ts translation files to .qm binaries
+	pyside6-lrelease sshive/i18n/*.ts
+
+i18n: update-i18n compile-i18n ## Extract and compile all translations

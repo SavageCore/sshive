@@ -22,7 +22,7 @@ class AboutDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
-        self.setWindowTitle("About SSHive")
+        self.setWindowTitle(self.tr("About SSHive"))
         self.setFixedSize(450, 400)
         self._setup_ui()
 
@@ -35,10 +35,10 @@ class AboutDialog(QDialog):
 
         # App Info
         info_layout = QVBoxLayout()
-        app_name = QLabel("<b>SSHive</b>")
+        app_name = QLabel(self.tr("<b>SSHive</b>"))
         app_name.setStyleSheet("font-size: 24px;")
 
-        version_label = QLabel(f"Version {__version__}")
+        version_label = QLabel(self.tr("Version {}").format(__version__))
         version_label.setStyleSheet("color: gray;")
 
         info_layout.addWidget(app_name)
@@ -49,15 +49,17 @@ class AboutDialog(QDialog):
         layout.addLayout(header_layout)
 
         description = QLabel(
-            "Your hive of SSH connections - A modern SSH connection manager "
-            "built with Python and PySide6."
+            self.tr(
+                "Your hive of SSH connections - A modern SSH connection manager "
+                "built with Python and PySide6.",
+            )
         )
         description.setWordWrap(True)
         layout.addWidget(description)
 
         # Tabs or sections for License
         layout.addSpacing(10)
-        license_label = QLabel("<b>License Information:</b>")
+        license_label = QLabel(self.tr("<b>License Information:</b>"))
         layout.addWidget(license_label)
 
         license_text = QTextEdit()
@@ -82,7 +84,7 @@ class AboutDialog(QDialog):
         # Close button
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(self.tr("Close"))
         close_btn.clicked.connect(self.accept)
         button_layout.addWidget(close_btn)
         layout.addLayout(button_layout)

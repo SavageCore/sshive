@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import qtawesome as qta
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from sshive.models.connection import SSHConnection
 from sshive.ui.icon_manager import IconManager
+from sshive.ui.theme import ThemeManager
 
 
 class AddConnectionDialog(QDialog):
@@ -43,7 +45,7 @@ class AddConnectionDialog(QDialog):
         self.connection = connection
         self.existing_groups = existing_groups or []
 
-        self.setWindowTitle("Edit Connection" if connection else "Add Connection")
+        self.setWindowTitle(self.tr("Edit Connection") if connection else self.tr("Add Connection"))
         self.setMinimumWidth(500)
 
         self._setup_ui()
@@ -61,46 +63,44 @@ class AddConnectionDialog(QDialog):
 
         # Name
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("e.g., Production Server")
-        form_layout.addRow("Name:", self.name_input)
+        self.name_input.setPlaceholderText(self.tr("e.g., Production Server"))
+        form_layout.addRow(self.tr("Name:"), self.name_input)
 
         # Host
         self.host_input = QLineEdit()
-        self.host_input.setPlaceholderText("e.g., example.com or 192.168.1.1")
-        form_layout.addRow("Host:", self.host_input)
+        self.host_input.setPlaceholderText(self.tr("e.g., example.com or 192.168.1.1"))
+        form_layout.addRow(self.tr("Host:"), self.host_input)
 
         # User
         self.user_input = QLineEdit()
-        self.user_input.setPlaceholderText("e.g., root or ubuntu")
-        form_layout.addRow("User:", self.user_input)
+        self.user_input.setPlaceholderText(self.tr("e.g., root or ubuntu"))
+        form_layout.addRow(self.tr("User:"), self.user_input)
 
         # Port
         self.port_input = QSpinBox()
         self.port_input.setRange(1, 65535)
         self.port_input.setValue(22)
-        form_layout.addRow("Port:", self.port_input)
+        form_layout.addRow(self.tr("Port:"), self.port_input)
 
         # SSH Key
         key_layout = QHBoxLayout()
         self.key_input = QLineEdit()
-        self.key_input.setPlaceholderText("Optional - path to private key")
-        self.key_browse_btn = QPushButton("Browse...")
+        self.key_input.setPlaceholderText(self.tr("Optional - path to private key"))
+        self.key_browse_btn = QPushButton(self.tr("Browse..."))
         self.key_browse_btn.clicked.connect(self._browse_key)
         key_layout.addWidget(self.key_input)
         key_layout.addWidget(self.key_browse_btn)
-        form_layout.addRow("SSH Key:", key_layout)
+        form_layout.addRow(self.tr("SSH Key:"), key_layout)
 
         # Password
         password_layout = QHBoxLayout()
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setPlaceholderText("Optional - SSH password")
+        self.password_input.setPlaceholderText(self.tr("Optional - SSH password"))
 
         self.toggle_password_btn = QToolButton()
-        from sshive.ui.theme import ThemeManager
 
         icon_color = "white" if ThemeManager.is_system_dark_mode() else "black"
-        import qtawesome as qta
 
         self.toggle_password_btn.setIcon(qta.icon("fa5s.eye", color=icon_color))
         self.toggle_password_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -109,29 +109,31 @@ class AddConnectionDialog(QDialog):
 
         password_layout.addWidget(self.password_input)
         password_layout.addWidget(self.toggle_password_btn)
-        form_layout.addRow("Password:", password_layout)
+        form_layout.addRow(self.tr("Password:"), password_layout)
 
         # Group (combobox with editable text)
         self.group_input = QComboBox()
         self.group_input.setEditable(True)
         self.group_input.addItems(self.existing_groups)
-        self.group_input.setCurrentText("Default")
-        form_layout.addRow("Group:", self.group_input)
+        self.group_input.setCurrentText(self.tr("Default"))
+        form_layout.addRow(self.tr("Group:"), self.group_input)
 
         # Icon
         icon_layout = QHBoxLayout()
         self.icon_input = QLineEdit()
-        self.icon_input.setPlaceholderText("e.g. proxmox, home-assistant")
+        self.icon_input.setPlaceholderText(self.tr("e.g. proxmox, home-assistant"))
         self.icon_input.textChanged.connect(self._update_icon_preview_from_text)
 
-        self.icon_preview = QLabel("No Icon")
+        self.icon_preview = QLabel()
         self.icon_preview.setFixedSize(32, 32)
         self.icon_preview.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
         self.icon_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_preview.setToolTip(self.tr("No Icon"))
+        self.icon_preview.setPixmap(qta.icon("fa5s.image", color="gray").pixmap(20, 20))
 
         icon_layout.addWidget(self.icon_input)
         icon_layout.addWidget(self.icon_preview)
-        form_layout.addRow("Icon:", icon_layout)
+        form_layout.addRow(self.tr("Icon:"), icon_layout)
 
         # Connect name change to auto-fill icon (only if icon is empty)
         self.name_input.textChanged.connect(self._auto_fill_icon)
@@ -142,15 +144,23 @@ class AddConnectionDialog(QDialog):
 
         self.icon_manager = IconManager.instance()
         self.icon_manager.icon_loaded.connect(self._on_icon_loaded)
+        self.icon_manager.icon_failed.connect(self._on_icon_failed)
 
         # Info label
-        info_label = QLabel(
-            "💡 Tip: SSH keys should be in ~/.ssh/ directory. "
-            "Use ssh-keygen to create one if needed."
+        info_layout = QHBoxLayout()
+        tip_icon = QLabel()
+        tip_icon.setPixmap(qta.icon("fa5s.lightbulb", color="#FFD700").pixmap(14, 14))
+        tip_text = QLabel(
+            self.tr(
+                "Tip: SSH keys should be in ~/.ssh/ directory. Use ssh-keygen to create one if needed."
+            )
         )
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: gray; font-size: 10px;")
-        layout.addWidget(info_label)
+        tip_text.setWordWrap(True)
+        tip_text.setStyleSheet("color: gray; font-size: 10px;")
+        info_layout.addWidget(tip_icon, 0)
+        info_layout.addWidget(tip_text, 1)
+        info_layout.setAlignment(tip_icon, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(info_layout)
 
         # Buttons
         button_box = QDialogButtonBox(
@@ -171,9 +181,9 @@ class AddConnectionDialog(QDialog):
 
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select SSH Private Key",
+            self.tr("Select SSH Private Key"),
             str(ssh_dir),
-            "SSH Private Keys (*.key *.pem *.ppk id_*);;All Files (*)",
+            self.tr("SSH Private Keys (*.key *.pem *.ppk id_*);;All Files (*)"),
         )
 
         if file_path:
@@ -217,7 +227,8 @@ class AddConnectionDialog(QDialog):
         """Update the icon preview label."""
         if not icon_name:
             self.icon_preview.clear()
-            self.icon_preview.setText("No Icon")
+            self.icon_preview.setToolTip(self.tr("No Icon"))
+            self.icon_preview.setPixmap(qta.icon("fa5s.image", color="gray").pixmap(20, 20))
             return
 
         manager = IconManager.instance()
@@ -237,12 +248,23 @@ class AddConnectionDialog(QDialog):
         else:
             # Trigger fetch if not cached
             manager.fetch_icon(icon_name)
-            self.icon_preview.setText("Loading...")
+            self.icon_preview.setPixmap(
+                qta.icon(
+                    "fa5s.spinner", color="gray", animation=qta.Spin(self.icon_preview)
+                ).pixmap(20, 20)
+            )
 
     def _on_icon_loaded(self, name, path):
         """Handle icon loaded signal."""
         if self.icon_input.text() == name:
             self._update_icon_preview(name)
+
+    def _on_icon_failed(self, name):
+        if self.icon_input.text() == name:
+            self.icon_preview.setPixmap(
+                qta.icon("fa5s.exclamation-circle", color="#e05252").pixmap(20, 20)
+            )
+            self.icon_preview.setToolTip(self.tr("Icon '{}' not found").format(name))
 
     def _auto_fill_icon(self, name):
         """Auto-fill icon field based on connection name."""
@@ -283,7 +305,7 @@ class AddConnectionDialog(QDialog):
 
         key_path = self.key_input.text().strip() or None
         password = self.password_input.text() or None
-        group = self.group_input.currentText().strip() or "Default"
+        group = self.group_input.currentText().strip() or self.tr("Default")
         icon = self.icon_input.text().strip() or None
 
         try:

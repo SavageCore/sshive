@@ -6,6 +6,7 @@ Main entry point for the application.
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QLocale, QTranslator
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -27,6 +28,22 @@ def get_resource_path(filename: str) -> str:
 def main():
     """Main application entry point."""
     app = QApplication(sys.argv)
+
+    translator = QTranslator()
+    locale = QLocale.system().name()
+
+    qm_path = Path(__file__).parent / "i18n" / f"{locale}.qm"
+    if qm_path.exists():
+        translator.load(str(qm_path))
+        app.installTranslator(translator)
+
+    # Strip region code if full locale not found (e.g., use 'en' if 'en_US' not found)
+    elif "_" in locale:
+        base_locale = locale.split("_")[0]
+        qm_path = Path(__file__).parent / "i18n" / f"{base_locale}.qm"
+        if qm_path.exists():
+            translator.load(str(qm_path))
+            app.installTranslator(translator)
 
     # Use Fusion style for cross-platform consistency
     app.setStyle("Fusion")
