@@ -342,8 +342,8 @@ Check that you have a terminal emulator installed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/main_window.py" line="931"/>
-        <location filename="../ui/main_window.py" line="946"/>
+        <location filename="../ui/main_window.py" line="930"/>
+        <location filename="../ui/main_window.py" line="945"/>
         <source>Update Available! ({})</source>
         <translation type="unfinished"></translation>
     </message>
@@ -351,72 +351,72 @@ Check that you have a terminal emulator installed.</source>
 <context>
     <name>SettingsDialog</name>
     <message>
-        <location filename="../ui/settings_dialog.py" line="64"/>
+        <location filename="../ui/settings_dialog.py" line="71"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="74"/>
+        <location filename="../ui/settings_dialog.py" line="81"/>
         <source>General</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="77"/>
+        <location filename="../ui/settings_dialog.py" line="84"/>
         <source>Verify credentials before connecting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="79"/>
+        <location filename="../ui/settings_dialog.py" line="86"/>
         <source>Performs a quick background check before launching the terminal.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="85"/>
+        <location filename="../ui/settings_dialog.py" line="92"/>
         <source>Check for updates on startup</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="87"/>
+        <location filename="../ui/settings_dialog.py" line="94"/>
         <source>Automatically check for new versions when the app starts.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="94"/>
+        <location filename="../ui/settings_dialog.py" line="101"/>
         <source>Prevents terminal flashing by checking credentials first. Adds a slight delay to connection launch.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="106"/>
+        <location filename="../ui/settings_dialog.py" line="113"/>
         <source>Theme Preference:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="108"/>
+        <location filename="../ui/settings_dialog.py" line="115"/>
         <source>System</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="108"/>
+        <location filename="../ui/settings_dialog.py" line="115"/>
         <source>Dark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="108"/>
+        <location filename="../ui/settings_dialog.py" line="115"/>
         <source>Light</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="117"/>
+        <location filename="../ui/settings_dialog.py" line="124"/>
         <source>Language:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="130"/>
+        <location filename="../ui/settings_dialog.py" line="137"/>
         <source>⚠ A restart is required to apply the language change.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/settings_dialog.py" line="142"/>
+        <location filename="../ui/settings_dialog.py" line="149"/>
         <source>Visible Columns</source>
         <translation type="unfinished"></translation>
     </message>

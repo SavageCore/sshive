@@ -129,53 +129,19 @@ SSHive relies on your system's utilities to actually perform the SSH connection.
 
 ## Development
 
-We welcome contributions! The project uses `uv` for lightning-fast dependency management, `ruff` for linting, and `pytest` for testing.
-
-```bash
-# Setup the project
-git clone https://github.com/SavageCore/sshive.git
-cd sshive
-uv sync
-
-# Run the app locally
-make run
-
-# Run the test suite
-make test
-
-make fix
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation, please see our [Contributing Guide](CONTRIBUTING.md) for details on developer setup, coding standards, and our pull request process.
 
 ### Internationalization (i18n)
-To extract translation strings for localization, you need the `pyside6-tools` package (provides `pyside6-lupdate`).
 
-```
-Install using a package manager:
-```bash
-sudo apt install pyside6-tools   # Debian/Ubuntu
-sudo dnf install pyside6-tools   # Fedora
-```
-Then run:
-```bash
-make i18n
-```
-This will generate/update translation source files in `sshive/i18n/` and then compile to `.qm`.
-```
+Interested in helping translate SSHive? See the [Translation Guide](TRANSLATING.md) (linked via the Contributing Guide) for instructions on how to contribute localizations.
 
 ### Building Packages
 
-You can also build the application formats locally by executing these Makefile targets from the project directory:
+For instructions on building native packages (`.deb`, `.rpm`), Flatpaks, or AppImages locally, please refer to the [Contributing Guide](CONTRIBUTING.md).
 
-```bash
-# Build the flatpak (Requires flatpak-builder installed)
-make flatpak
+## Contributing
 
-# Build an AppImage locally
-make appimage
-
-# Build a .deb or .rpm package (Requires nfpm installed)
-make deb
-make rpm
-```
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ## License
 

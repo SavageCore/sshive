@@ -202,64 +202,34 @@ sshive/
 └── scripts/             # Helper scripts (future)
 ```
 
-## Adding New Features
+### [Building Packages locally](file:///home/savagecore/Git/sshive/README.md#L164-L178)
 
-### 1. Connection Features
+You can build the application formats locally by executing these Makefile targets from the project directory:
 
-Example: Adding connection tags
+```bash
+# Build the Flatpak (Requires flatpak-builder installed)
+make flatpak
 
-1. Update `SSHConnection` model in `sshive/models/connection.py`
-2. Update storage serialization
-3. Update UI dialog to include tags field
-4. Add tests for tag functionality
+# Build an AppImage locally
+make appimage
 
-### 2. UI Features
+# Build a .deb or .rpm package (Requires nfpm installed)
+make deb
+make rpm
+```
 
-Example: Adding search/filter
+## Translations
 
-1. Add search widget to main window
-2. Implement filter logic
-3. Update tree view population
-4. Add keyboard shortcuts
-5. Write UI tests
+Interested in helping translate SSHive into your language? See the [Translation Guide](TRANSLATING.md) for instructions on how to contribute localizations.
 
-### 3. Terminal Features
+### Prerequisites for i18n
+To extract translation strings, you need the `pyside6-tools` package (provides `pyside6-lupdate`).
 
-Example: Supporting a new terminal
-
-1. Update `SSHLauncher.detect_terminal()` in `sshive/ssh/launcher.py`
-2. Add terminal-specific command format
-3. Test on target platform
-4. Update documentation
-
-## Bug Reports
-
-When reporting bugs, include:
-
-- **Description:** Clear description of the issue
-- **Steps to reproduce:** Step-by-step instructions
-- **Expected behavior:** What should happen
-- **Actual behavior:** What actually happens
-- **Environment:**
-  - OS and version
-  - Python version
-  - SSHive version
-  - Terminal emulator
-
-## Feature Requests
-
-For feature requests:
-
-- Check existing issues first
-- Describe the use case
-- Explain why it's useful
-- Provide examples if possible
-
-## Questions?
-
-- Open a discussion on GitHub
-- Check existing issues and PRs
-- Read the documentation
+Install using a package manager:
+```bash
+sudo apt install pyside6-tools   # Debian/Ubuntu
+sudo dnf install pyside6-tools   # Fedora
+```
 
 ## License
 

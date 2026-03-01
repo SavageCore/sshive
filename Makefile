@@ -152,9 +152,9 @@ clean-appimage: ## Remove build tools and temporary files
 	rm -f SSHive-*.AppImage
 
 update-i18n: ## Extract translation strings for i18n
-	pyside6-lupdate sshive/ui/*.py sshive/ssh/launcher.py -ts sshive/i18n/en.ts
+	uv run pyside6-lupdate sshive/ui/*.py sshive/ssh/launcher.py -ts sshive/i18n/en.ts
 
 compile-i18n: ## Compile .ts translation files to .qm binaries
-	pyside6-lrelease sshive/i18n/*.ts
+	uv run pyside6-lrelease sshive/i18n/*.ts
 
 i18n: update-i18n compile-i18n ## Extract and compile all translations
