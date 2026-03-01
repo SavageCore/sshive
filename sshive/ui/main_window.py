@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
 
         self._load_connections()
 
-        self.setWindowTitle("SSHive - SSH Connection Manager")
+        self.setWindowTitle(self.tr("SSHive - SSH Connection Manager"))
 
         # Restore window state and geometry (Wayland may only restore size)
         if not self.restoreGeometry(self.settings.value("geometry", b"")):
@@ -114,7 +114,7 @@ class MainWindow(QMainWindow):
 
         # Search bar
         self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search connections...")
+        self.search_bar.setPlaceholderText(self.tr("Search connections..."))
         self.search_bar.setClearButtonEnabled(True)
         self.search_bar.setFixedWidth(300)
         search_icon = qta.icon("fa5s.search", color=self.icon_color)
@@ -126,9 +126,9 @@ class MainWindow(QMainWindow):
 
         # Update button (hidden by default)
         self.update_btn = QToolButton()
-        self.update_btn.setText("Update Available!")
+        self.update_btn.setText(self.tr("Update Available!"))
         self.update_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.update_btn.setToolTip("A new version is available! Click to update.")
+        self.update_btn.setToolTip(self.tr("A new version is available! Click to update."))
 
         self.update_icon_default = qta.icon("fa5s.arrow-alt-circle-up", color="#3498db")
         self.update_icon_hover = qta.icon("fa5s.arrow-alt-circle-up", color="white")
@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
         settings_icon = qta.icon("fa5s.bars", color=self.icon_color)
         self.settings_btn = QToolButton()
         self.settings_btn.setIcon(settings_icon)
-        self.settings_btn.setToolTip("Options")
+        self.settings_btn.setToolTip(self.tr("Options"))
         self.settings_btn.setStyleSheet("border: none; padding: 4px;")
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -165,8 +165,8 @@ class MainWindow(QMainWindow):
 
         # Check for Updates action
         check_updates_icon = qta.icon("fa5s.arrow-alt-circle-up", color=self.icon_color)
-        self.check_updates_action = QAction(check_updates_icon, "Check for Updates", self)
-        self.check_updates_action.setToolTip("Check for new SSHive updates.")
+        self.check_updates_action = QAction(check_updates_icon, self.tr("Check for Updates"), self)
+        self.check_updates_action.setToolTip(self.tr("Check for new SSHive updates."))
         self.check_updates_action.triggered.connect(
             lambda: self.updater.check_for_updates(force=True)
         )
@@ -176,15 +176,15 @@ class MainWindow(QMainWindow):
 
         # Settings action
         settings_icon = qta.icon("fa5s.cog", color=self.icon_color)
-        settings_action = QAction(settings_icon, "Settings", self)
-        settings_action.setToolTip("Configure SSHive settings.")
+        settings_action = QAction(settings_icon, self.tr("Settings"), self)
+        settings_action.setToolTip(self.tr("Configure SSHive settings."))
         settings_action.triggered.connect(self._show_settings_dialog)
         self.settings_menu.addAction(settings_action)
 
         # About action
         about_icon = qta.icon("fa5s.info-circle", color=self.icon_color)
-        about_action = QAction(about_icon, "About", self)
-        about_action.setToolTip("About SSHive.")
+        about_action = QAction(about_icon, self.tr("About"), self)
+        about_action.setToolTip(self.tr("About SSHive."))
         about_action.triggered.connect(self._show_about_dialog)
         self.settings_menu.addAction(about_action)
 
@@ -198,7 +198,9 @@ class MainWindow(QMainWindow):
 
         # Connection tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Name", "Host", "User", "Port"])
+        self.tree.setHeaderLabels(
+            [self.tr("Name"), self.tr("Host"), self.tr("User"), self.tr("Port")]
+        )
         self.tree.setColumnWidth(0, 250)
         self.tree.setColumnWidth(1, 200)
         self.tree.setColumnWidth(2, 150)
@@ -224,14 +226,14 @@ class MainWindow(QMainWindow):
         # Bottom buttons
         button_layout = QHBoxLayout()
 
-        self.add_btn = QPushButton("Add Connection")
+        self.add_btn = QPushButton(self.tr("Add Connection"))
         self.add_btn.setIcon(add_icon)
         self.add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_btn.clicked.connect(self._add_connection)
         button_layout.addWidget(self.add_btn)
 
         clone_icon = qta.icon("fa5s.clone", color=self.icon_color)
-        self.clone_btn = QPushButton("Clone")
+        self.clone_btn = QPushButton(self.tr("Clone"))
         self.clone_btn.setIcon(clone_icon)
         self.clone_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clone_btn.clicked.connect(self._clone_connection)
@@ -239,7 +241,7 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.clone_btn)
 
         edit_icon = qta.icon("fa5s.edit", color=self.icon_color)
-        self.edit_btn = QPushButton("Edit")
+        self.edit_btn = QPushButton(self.tr("Edit"))
         self.edit_btn.setIcon(edit_icon)
         self.edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.edit_btn.clicked.connect(lambda: self._edit_connection())
@@ -247,7 +249,7 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.edit_btn)
 
         delete_icon = qta.icon("fa5s.trash", color=self.icon_color)
-        self.delete_btn = QPushButton("Delete")
+        self.delete_btn = QPushButton(self.tr("Delete"))
         self.delete_btn.setIcon(delete_icon)
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_btn.clicked.connect(self._delete_connection)
@@ -257,7 +259,7 @@ class MainWindow(QMainWindow):
         button_layout.addStretch()
 
         connect_icon = qta.icon("fa5s.rocket", color=self.icon_color)
-        self.connect_btn = QPushButton("Connect")
+        self.connect_btn = QPushButton(self.tr("Connect"))
         self.connect_btn.setIcon(connect_icon)
         self.connect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.connect_btn.clicked.connect(lambda: self._connect_to_server(None))
@@ -282,7 +284,7 @@ class MainWindow(QMainWindow):
 
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts."""
-        self.incognito_action = QAction("Toggle Incognito Mode", self)
+        self.incognito_action = QAction(self.tr("Toggle Incognito Mode"), self)
         self.incognito_action.setShortcut("Ctrl+I")
         self.incognito_action.triggered.connect(self._toggle_incognito_mode)
         self.addAction(self.incognito_action)
@@ -491,7 +493,7 @@ class MainWindow(QMainWindow):
         # Group connections by group name
         grouped_conns: dict[str, list[SSHConnection]] = {}
         for conn in self.connections:
-            group_name = conn.group or "Default"
+            group_name = conn.group or self.tr("Default")
             if group_name not in grouped_conns:
                 grouped_conns[group_name] = []
             grouped_conns[group_name].append(conn)
@@ -544,7 +546,7 @@ class MainWindow(QMainWindow):
 
                 conn_item.setData(0, Qt.ItemDataRole.UserRole, conn)
                 if self.incognito_mode:
-                    conn_item.setToolTip(0, "Incognito mode active")
+                    conn_item.setToolTip(0, self.tr("Incognito mode active"))
                 else:
                     conn_item.setToolTip(0, str(conn))
 
@@ -706,8 +708,8 @@ class MainWindow(QMainWindow):
 
         reply = QMessageBox.question(
             self,
-            "Confirm Delete",
-            f"Are you sure you want to delete '{connection.name}'?",
+            self.tr("Confirm Delete"),
+            self.tr("Are you sure you want to delete '{}'?").format(connection.name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -753,8 +755,8 @@ class MainWindow(QMainWindow):
         if not success:
             QMessageBox.warning(
                 self,
-                "Connection Error",
-                f"Cannot connect to {connection.name}.\n\n{error_msg}",
+                self.tr("Connection Error"),
+                self.tr("Cannot connect to '{}'.\n\n{}'").format(connection.name, error_msg),
             )
             return
 
@@ -771,8 +773,10 @@ class MainWindow(QMainWindow):
                     QApplication.restoreOverrideCursor()
                     QMessageBox.critical(
                         self,
-                        "Authentication Failed",
-                        f"Failed to authenticate for {connection.name}.\n\n{auth_error}",
+                        self.tr("Authentication Failed"),
+                        self.tr("Failed to authenticate for {}.\n\n{}'").format(
+                            connection.name, auth_error
+                        ),
                     )
                     return
             finally:
@@ -784,9 +788,11 @@ class MainWindow(QMainWindow):
         if not success:
             QMessageBox.warning(
                 self,
-                "Launch Error",
-                f"Failed to launch terminal for {connection.name}.\n\n"
-                f"Check that you have a terminal emulator installed.",
+                self.tr("Launch Error"),
+                self.tr(
+                    "Failed to launch terminal for {}.\n\n"
+                    "Check that you have a terminal emulator installed."
+                ).format(connection.name),
             )
 
     def _show_context_menu(self, position):
@@ -805,18 +811,24 @@ class MainWindow(QMainWindow):
 
         menu = QMenu()
 
-        connect_action = menu.addAction(qta.icon("fa5s.rocket", color=self.icon_color), "Connect")
+        connect_action = menu.addAction(
+            qta.icon("fa5s.rocket", color=self.icon_color), self.tr("Connect")
+        )
         connect_action.triggered.connect(lambda: self._connect_to_server(item))
 
         menu.addSeparator()
 
-        clone_action = menu.addAction(qta.icon("fa5s.clone", color=self.icon_color), "Clone")
+        clone_action = menu.addAction(
+            qta.icon("fa5s.clone", color=self.icon_color), self.tr("Clone")
+        )
         clone_action.triggered.connect(lambda: self._clone_connection(item))
 
-        edit_action = menu.addAction(qta.icon("fa5s.edit", color=self.icon_color), "Edit")
+        edit_action = menu.addAction(qta.icon("fa5s.edit", color=self.icon_color), self.tr("Edit"))
         edit_action.triggered.connect(lambda: self._edit_connection(item))
 
-        delete_action = menu.addAction(qta.icon("fa5s.trash", color=self.icon_color), "Delete")
+        delete_action = menu.addAction(
+            qta.icon("fa5s.trash", color=self.icon_color), self.tr("Delete")
+        )
         delete_action.triggered.connect(lambda: self._delete_connection(item))
 
         menu.exec(self.tree.viewport().mapToGlobal(position))
@@ -833,7 +845,7 @@ class MainWindow(QMainWindow):
 
         menu = QMenu()
         column_name = self.tree.headerItem().text(column)
-        hide_action = menu.addAction(f"Hide {column_name}")
+        hide_action = menu.addAction(self.tr("Hide {}").format(column_name))
         hide_action.triggered.connect(lambda: self._hide_column(column))
 
         menu.exec(self.tree.header().mapToGlobal(position))
@@ -875,6 +887,10 @@ class MainWindow(QMainWindow):
             self.settings.setValue("theme_preference", theme_val)
             self._apply_theme()
 
+            # Save language preference (takes effect on next launch)
+            lang_val = settings.get("language", "system")
+            self.settings.setValue("language", lang_val)
+
             self._update_column_stretch()
 
             # Save column state
@@ -911,7 +927,7 @@ class MainWindow(QMainWindow):
 
     def _on_update_available(self, version, url, notes):
         """Handle update available signal."""
-        self.check_updates_action.setText(f"Update Available! ({version})")
+        self.check_updates_action.setText(self.tr("Update Available! ({})").format(version))
         # Ensure it's prominent or we can just keep it in menu
         # Maybe show the dialog automatically if it's the first time?
         # For now, just updating the menu item is what was implied.
@@ -926,7 +942,7 @@ class MainWindow(QMainWindow):
         )
 
         # Show update button
-        self.update_btn.setText(f"Update Available! ({version})")
+        self.update_btn.setText(self.tr("Update Available! ({})").format(version))
         self.update_btn.setVisible(True)
 
         # Reconnect clicked to show dialog

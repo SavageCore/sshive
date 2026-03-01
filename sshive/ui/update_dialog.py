@@ -35,7 +35,7 @@ class UpdateDialog(QDialog):
         self.download_url = download_url
         self.updater = updater
 
-        self.setWindowTitle("Update Available")
+        self.setWindowTitle(self.tr("Update Available"))
         self.setMinimumSize(500, 400)
 
         self._setup_ui(release_notes)
@@ -45,11 +45,11 @@ class UpdateDialog(QDialog):
         """Setup the dialog UI."""
         layout = QVBoxLayout(self)
 
-        header = QLabel(f"<b>A new version of SSHive is available: {self.version}</b>")
+        header = QLabel(f"<b>{self.tr('A new version of SSHive is available')}: {self.version}</b>")
         header.setStyleSheet("font-size: 14px;")
         layout.addWidget(header)
 
-        notes_label = QLabel("Release Notes:")
+        notes_label = QLabel(self.tr("Release Notes:"))
         layout.addWidget(notes_label)
 
         self.notes_edit = QTextEdit()
@@ -68,14 +68,14 @@ class UpdateDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
 
-        self.cancel_btn = QPushButton("Not Now")
+        self.cancel_btn = QPushButton(self.tr("Not Now"))
         self.cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_btn)
 
         if sys.platform == "win32":
-            self.update_btn = QPushButton("Download && Install")  # Ampersand escapes the ampersand
+            self.update_btn = QPushButton(self.tr("Download & Install"))
         else:
-            self.update_btn = QPushButton("Download")
+            self.update_btn = QPushButton(self.tr("Download"))
         self.update_btn.setDefault(True)
         self.update_btn.clicked.connect(self._start_update)
         button_layout.addWidget(self.update_btn)
