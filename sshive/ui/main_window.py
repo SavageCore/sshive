@@ -1759,7 +1759,7 @@ class MainWindow(QMainWindow):
         merge = reply == QMessageBox.StandardButton.Yes
 
         if self.storage.import_connections(Path(path), merge=merge):
-            self.load_connections()
+            self._load_connections()
             if merge:
                 msg = self.tr(
                     "Connections imported (merged).\nChanges will be saved automatically."
