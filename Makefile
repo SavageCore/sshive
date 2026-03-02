@@ -72,7 +72,7 @@ package-prep: compile-i18n ## Prepare packaging root
 	rm -rf dist/package-root
 	mkdir -p dist/package-root/usr/bin
 	mkdir -p dist/package-root/usr/share/sshive
-	uv pip install . --target dist/package-root/usr/share/sshive --no-deps
+	uv pip install . --target dist/package-root/usr/share/sshive
 	@echo '#!/usr/bin/python3' > dist/package-root/usr/bin/sshive
 	@echo 'import sys' >> dist/package-root/usr/bin/sshive
 	@echo 'sys.path.insert(0, "/usr/share/sshive")' >> dist/package-root/usr/bin/sshive
