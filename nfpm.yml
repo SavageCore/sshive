@@ -23,9 +23,7 @@ contents:
 overrides:
   deb:
     depends:
-      - python3-pyside6
-      - python3-qtawesome
+      - python3
   rpm:
     depends:
-      - python3-pyside6
-      - python3-QtAwesome
+      - python3

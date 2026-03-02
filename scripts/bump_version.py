@@ -8,6 +8,7 @@ def bump_version(new_version):
     files_to_update = [
         ("pyproject.toml", r'^version = "[^"]+"', f'version = "{new_version}"'),
         ("nfpm.yml", r'^version: "[^"]+"', f'version: "{new_version}"'),
+        ("PKGBUILD", r"^pkgver=.*", f"pkgver={new_version}"),
         (
             "sshive/__init__.py",
             r'^__version__ = "[^"]+"',

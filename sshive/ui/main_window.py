@@ -396,6 +396,7 @@ class MainWindow(QMainWindow):
     def _show_recent_connections_menu(self):
         """Show a recent connections popup dialog."""
         import random
+
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QLabel, QListWidgetItem
 

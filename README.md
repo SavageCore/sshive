@@ -51,7 +51,21 @@ The best way to install SSHive on Linux is using our native packages, which inte
    # Fedora/RHEL
    sudo dnf install ./SSHive-*.rpm
    ```
-3. For **Arch Linux**, clone the repository and build using the provided `PKGBUILD`: `makepkg -si`.
+3. For **Arch Linux / CachyOS**, install the AUR runtime dependency and then build SSHive from the provided `PKGBUILD`:
+  ```bash
+  sudo pacman -Syu --needed base-devel git
+
+  # Required runtime dependency (AUR)
+  git clone https://aur.archlinux.org/python-nanoid.git
+  cd python-nanoid
+  makepkg -si
+  cd ..
+
+  # Build and install SSHive
+  git clone https://github.com/SavageCore/sshive.git
+  cd sshive
+  makepkg -si
+  ```
 
 ### Flatpak
 
