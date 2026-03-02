@@ -1045,6 +1045,9 @@ class MainWindow(QMainWindow):
         """Load connections from storage and populate tree."""
         self.connections = self.storage.load_connections()
         self._populate_tree()
+        # Reapply search filter if search text exists
+        if self.search_bar.text():
+            self._on_search_text_changed(self.search_bar.text())
 
     def _find_connection_by_id(self, connection_id: str) -> SSHConnection | None:
         """Find a loaded connection by ID."""
@@ -1759,7 +1762,9 @@ class MainWindow(QMainWindow):
         merge = reply == QMessageBox.StandardButton.Yes
 
         if self.storage.import_connections(Path(path), merge=merge):
-            self.load_connections()
+            self._load_connections()
+            # Force Qt to process events and update the UI before showing the dialog
+            QApplication.processEvents()
             if merge:
                 msg = self.tr(
                     "Connections imported (merged).\nChanges will be saved automatically."
