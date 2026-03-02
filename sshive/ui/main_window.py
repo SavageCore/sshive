@@ -306,7 +306,57 @@ class MainWindow(QMainWindow):
 
         self._populate_tree()
 
-    INCOGNITO_VERSION = 3
+    INCOGNITO_VERSION = 4
+
+    INCOGNITO_SERVICES = [
+        ("Plex", "Media", "plex"),
+        ("Nextcloud", "Storage", "nextcloud"),
+        ("Home Assistant", "Automation", "home-assistant"),
+        ("Pi-hole", "Network", "pi-hole"),
+        ("Portainer", "Docker", "portainer"),
+        ("Uptime Kuma", "Monitoring", "uptime-kuma"),
+        ("Jellyfin", "Media", "jellyfin"),
+        ("AdGuard Home", "Network", "adguard-home"),
+        ("Nginx Proxy Manager", "Network", "nginx-proxy-manager"),
+        ("Vaultwarden", "Security", "bitwarden"),
+        ("Paperless-ngx", "Storage", "paperless-ngx"),
+        ("deluge", "Downloads", "deluge"),
+        ("Sonarr", "Downloads/Arr", "sonarr"),
+        ("Radarr", "Downloads/Arr", "radarr"),
+        ("Prowlarr", "Downloads/Arr", "prowlarr"),
+        ("Overseerr", "Downloads/Arr", "overseerr"),
+        ("Bazarr", "Downloads/Arr", "bazarr"),
+        ("rtorrent", "Downloads", "rtorrent"),
+        ("Transmission", "Downloads", "transmission"),
+        ("qBittorrent", "Downloads", "qbittorrent"),
+        ("Grafana", "Monitoring", "grafana"),
+        ("Prometheus", "Monitoring", "prometheus"),
+        ("Homebridge", "Automation", "homebridge"),
+        ("FreshRSS", "Media", "freshrss"),
+        ("Mealie", "Storage", "mealie"),
+        ("Ghost", "Web", "ghost"),
+        ("WordPress", "Web", "wordpress"),
+        ("Node-RED", "Automation", "node-red"),
+        ("Mosquitto", "Automation", "mosquitto"),
+        ("TrueNAS Core", "Storage", "truenas"),
+        ("Unraid OS", "Storage", "unraid"),
+        ("Bitwarden", "Security", "bitwarden"),
+        ("Logsnag", "Monitoring", "logsnag"),
+        ("Netdata", "Monitoring", "netdata"),
+        ("Checkmk", "Monitoring", "checkmk"),
+        ("Guacamole", "Network", "guacamole"),
+        ("Tailscale", "Network", "tailscale"),
+        ("WireGuard", "Network", "wireguard"),
+        ("Dozzle", "Docker", "dozzle"),
+        ("Statping", "Monitoring", "statping"),
+        ("Audiobookshelf", "Media", "audiobookshelf"),
+        ("Navidrome", "Media", "navidrome"),
+        ("Gitea", "Web", "gitea"),
+        ("Wiki.js", "Web", "wikijs"),
+        ("Heimdall", "Web", "heimdall"),
+        ("Flame", "Web", "flame"),
+        ("Organizr", "Web", "organizr"),
+    ]
 
     def _load_or_generate_incognito_connections(self) -> list[SSHConnection]:
         """Load fake connections from file or generate them deterministically."""
@@ -327,26 +377,28 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"Failed to load incognito connections: {e}")
 
-        # Fallback: generate deterministically from real connections
+        # Fallback: generate deterministically from full service catalog
         fake_conns = []
         used_identities = set()
 
-        for i, conn in enumerate(self.connections):
+        for i, (_, _, icon_name) in enumerate(self.INCOGNITO_SERVICES):
+            fake_id = f"incognito-{icon_name}-{i}"
+
             # Ensure we cycle through services correctly
-            name, host, user, group, icon, _ = self._get_fake_data(conn.id, service_index=i)
+            name, host, user, group, icon, _ = self._get_fake_data(fake_id, service_index=i)
 
             # Handle potential identity collisions
             counter = 1
             while (name, host) in used_identities and counter < 10:
                 name, host, user, group, icon, _ = self._get_fake_data(
-                    f"{conn.id}-{counter}", service_index=i + counter
+                    f"{fake_id}-{counter}", service_index=i + counter
                 )
                 counter += 1
 
             used_identities.add((name, host))
 
             # Use deterministic port
-            _, _, _, _, _, fake_port = self._get_fake_data(conn.id, service_index=i)
+            _, _, _, _, _, fake_port = self._get_fake_data(fake_id, service_index=i)
 
             fake_conn = SSHConnection(
                 name=name,
@@ -355,7 +407,7 @@ class MainWindow(QMainWindow):
                 port=fake_port,
                 group=group,
                 icon=icon,
-                id=conn.id,
+                id=fake_id,
             )
             fake_conns.append(fake_conn)
 
@@ -388,61 +440,11 @@ class MainWindow(QMainWindow):
 
         seed = int(hashlib.md5(connection_id.encode()).hexdigest(), 16)
 
-        services = [
-            ("Plex", "Media", "plex"),
-            ("Nextcloud", "Storage", "nextcloud"),
-            ("Home Assistant", "Automation", "home-assistant"),
-            ("Pi-hole", "Network", "pi-hole"),
-            ("Portainer", "Docker", "portainer"),
-            ("Uptime Kuma", "Monitoring", "uptime-kuma"),
-            ("Jellyfin", "Media", "jellyfin"),
-            ("AdGuard Home", "Network", "adguard-home"),
-            ("Nginx Proxy Manager", "Network", "nginx-proxy-manager"),
-            ("Vaultwarden", "Security", "bitwarden"),
-            ("Paperless-ngx", "Storage", "paperless-ngx"),
-            ("deluge", "Downloads", "deluge"),
-            ("rtorrent", "Downloads", "rtorrent"),
-            ("Transmission", "Downloads", "transmission"),
-            ("qBittorrent", "Downloads", "qbittorrent"),
-            ("Grafana", "Monitoring", "grafana"),
-            ("Prometheus", "Monitoring", "prometheus"),
-            ("Homebridge", "Automation", "homebridge"),
-            ("FreshRSS", "Media", "freshrss"),
-            ("Mealie", "Storage", "mealie"),
-            ("Ghost", "Web", "ghost"),
-            ("WordPress", "Web", "wordpress"),
-            ("Node-RED", "Automation", "node-red"),
-            ("Mosquitto", "Automation", "mosquitto"),
-            ("TrueNAS Core", "Storage", "truenas"),
-            ("Unraid OS", "Storage", "unraid"),
-            ("Bitwarden", "Security", "bitwarden"),
-            ("Logsnag", "Monitoring", "logsnag"),
-            ("Netdata", "Monitoring", "netdata"),
-            ("Checkmk", "Monitoring", "checkmk"),
-            ("Guacamole", "Network", "guacamole"),
-            ("Tailscale", "Network", "tailscale"),
-            ("WireGuard", "Network", "wireguard"),
-            ("Dozzle", "Docker", "dozzle"),
-            ("Statping", "Monitoring", "statping"),
-            ("Audiobookshelf", "Media", "audiobookshelf"),
-            ("Navidrome", "Media", "navidrome"),
-            ("Sonarr", "Downloads", "sonarr"),
-            ("Radarr", "Downloads", "radarr"),
-            ("Prowlarr", "Downloads", "prowlarr"),
-            ("Overseerr", "Downloads", "overseerr"),
-            ("Bazarr", "Downloads", "bazarr"),
-            ("Gitea", "Web", "gitea"),
-            ("Wiki.js", "Web", "wikijs"),
-            ("Heimdall", "Web", "heimdall"),
-            ("Flame", "Web", "flame"),
-            ("Organizr", "Web", "organizr"),
-        ]
-
         users = ["admin", "root", "pi", "user", "manager", "maintainer", "sysop", "dev"]
 
         # Use service_index if provided to ensure distribution, otherwise fallback to seed
         idx = service_index if service_index is not None else seed
-        service_info = services[idx % len(services)]
+        service_info = self.INCOGNITO_SERVICES[idx % len(self.INCOGNITO_SERVICES)]
 
         name = service_info[0]
         group = service_info[1]
