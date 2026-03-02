@@ -1,5 +1,6 @@
 """Tests for UI components."""
 
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -395,6 +396,170 @@ class TestMainWindow:
         conn_item = group_item.child(0)
         assert int(conn_item.text(3)) == randomized_port
 
+    def test_connect_records_recent_history_on_success(self, window, temp_storage, monkeypatch):
+        """Successful launches are persisted in recent connections history."""
+        conn = SSHConnection(name="Prod", host="prod.example.com", user="root", port=2222)
+        temp_storage.add_connection(conn)
+        window._load_connections()
+
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.test_connection", lambda connection: (True, None)
+        )
+        monkeypatch.setattr("sshive.ui.main_window.SSHLauncher.launch", lambda connection: True)
+
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+        window._connect_to_server(conn_item)
+
+        recent = temp_storage.get_recent_connections()
+        assert len(recent) == 1
+        assert recent[0]["id"] == conn.id
+
+    def test_connect_skips_recent_history_when_disabled(self, window, temp_storage, monkeypatch):
+        """History is not recorded when save_recent_history setting is disabled."""
+        conn = SSHConnection(name="Prod", host="prod.example.com", user="root", port=2222)
+        temp_storage.add_connection(conn)
+        window._load_connections()
+        window.settings.setValue("save_recent_history", "false")
+
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.test_connection", lambda connection: (True, None)
+        )
+        monkeypatch.setattr("sshive.ui.main_window.SSHLauncher.launch", lambda connection: True)
+
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+        window._connect_to_server(conn_item)
+
+        recent = temp_storage.get_recent_connections()
+        assert len(recent) == 0
+
+    def test_recent_connections_menu_shows_saved_entries(self, window, temp_storage):
+        """Recent menu is populated from persisted history and enables valid targets."""
+        conn = SSHConnection(name="DB", host="db.example.com", user="admin", port=2200)
+        temp_storage.add_connection(conn)
+        temp_storage.record_connection_used(conn)
+        window._load_connections()
+
+        window._refresh_recent_connections_menu()
+
+        actions = window.recent_menu.actions()
+        assert len(actions) == 3
+        assert actions[0].isEnabled() is True
+        assert "DB" in actions[0].text()
+        assert actions[2].text() == "Clear Recent History"
+        assert actions[2].isEnabled() is True
+
+    def test_recent_connections_menu_disables_clear_when_empty(self, window):
+        """Clear Recent History action is disabled when there is no history."""
+        window._refresh_recent_connections_menu()
+
+        actions = window.recent_menu.actions()
+        assert len(actions) == 3
+        assert actions[0].text() == "No recent connections"
+        assert actions[2].text() == "Clear Recent History"
+        assert actions[2].isEnabled() is False
+
+    def test_recent_connections_menu_shows_disabled_message_when_setting_off(
+        self, window, temp_storage
+    ):
+        """Recent menu indicates when history is disabled in settings."""
+        conn = SSHConnection(name="DB", host="db.example.com", user="admin", port=2200)
+        temp_storage.add_connection(conn)
+        temp_storage.record_connection_used(conn)
+        window.settings.setValue("save_recent_history", "false")
+
+        window._load_connections()
+        window._refresh_recent_connections_menu()
+
+        actions = window.recent_menu.actions()
+        assert len(actions) == 1
+        assert actions[0].isEnabled() is False
+        assert actions[0].text() == "History is disabled in Settings"
+
+    def test_recent_connections_menu_disables_stale_entries(self, window, temp_storage):
+        """Recent menu entries are disabled when history points to missing connections."""
+        with open(temp_storage.config_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "version": "1.0",
+                    "connections": [],
+                    "recent_connections": [
+                        {
+                            "id": "missing-conn-id",
+                            "name": "Legacy",
+                            "host": "legacy.example.com",
+                            "user": "legacy",
+                            "port": 22,
+                            "last_connected_at": "2026-01-01T00:00:00+00:00",
+                        }
+                    ],
+                },
+                f,
+                indent=2,
+            )
+
+        window._load_connections()
+
+        window._refresh_recent_connections_menu()
+
+        actions = window.recent_menu.actions()
+        assert len(actions) == 3
+        assert actions[0].isEnabled() is False
+
+    def test_clear_recent_history_action_empties_history(self, window, temp_storage, monkeypatch):
+        """Clear action removes all recent history entries after confirmation."""
+        conn = SSHConnection(name="DB", host="db.example.com", user="admin", port=2200)
+        temp_storage.add_connection(conn)
+        temp_storage.record_connection_used(conn)
+
+        monkeypatch.setattr(
+            "sshive.ui.main_window.QMessageBox.question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        )
+
+        window._clear_recent_connections_history()
+        recent = temp_storage.get_recent_connections()
+        assert recent == []
+
+    def test_disabling_recent_history_prompts_and_clears_when_confirmed(
+        self, window, temp_storage, monkeypatch
+    ):
+        """Disabling history asks to clear existing history and clears it on Yes."""
+        conn = SSHConnection(name="DB", host="db.example.com", user="admin", port=2200)
+        temp_storage.add_connection(conn)
+        temp_storage.record_connection_used(conn)
+        window.settings.setValue("save_recent_history", "true")
+
+        class MockSettingsDialog:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def exec(self):
+                return True
+
+            def get_settings(self):
+                return {
+                    "verify_credentials": True,
+                    "check_updates_startup": True,
+                    "connection_test_debug": False,
+                    "close_to_tray": True,
+                    "save_recent_history": False,
+                    "theme_preference": "System",
+                    "language": "system",
+                    "column_visibility": {1: True, 2: True, 3: True},
+                }
+
+        monkeypatch.setattr("sshive.ui.main_window.SettingsDialog", MockSettingsDialog)
+        monkeypatch.setattr(
+            "sshive.ui.main_window.QMessageBox.question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        )
+
+        window._show_settings_dialog()
+
+        assert temp_storage.get_recent_connections() == []
+
 
 class TestAddConnectionDialog:
     """Test cases for AddConnectionDialog."""
@@ -720,6 +885,18 @@ class TestSettingsDialog:
         result = dialog.get_settings()
         assert "connection_test_debug" in result
         assert result["connection_test_debug"] is False
+
+    def test_get_settings_includes_close_to_tray(self, dialog):
+        """get_settings() includes close-to-tray toggle and defaults to enabled."""
+        result = dialog.get_settings()
+        assert "close_to_tray" in result
+        assert result["close_to_tray"] is True
+
+    def test_get_settings_includes_save_recent_history(self, dialog):
+        """get_settings() includes recent history persistence toggle and defaults to enabled."""
+        result = dialog.get_settings()
+        assert "save_recent_history" in result
+        assert result["save_recent_history"] is True
 
     def test_restart_label_hidden_by_default(self, dialog):
         """Restart warning label is hidden when dialog opens."""

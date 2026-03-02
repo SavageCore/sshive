@@ -105,6 +105,24 @@ class SettingsDialog(QDialog):
         debug_val = self.settings.value("connection_test_debug", "false")
         self.connection_test_debug_check.setChecked(debug_val == "true" or debug_val is True)
 
+        self.close_to_tray_check = QCheckBox(self.tr("Close to system tray when window is closed"))
+        self.close_to_tray_check.setToolTip(
+            self.tr("When enabled, closing the window keeps SSHive running in the tray.")
+        )
+        close_to_tray_val = self.settings.value("close_to_tray", "true")
+        self.close_to_tray_check.setChecked(
+            close_to_tray_val == "true" or close_to_tray_val is True
+        )
+
+        self.recent_history_check = QCheckBox(self.tr("Save recent connections history"))
+        self.recent_history_check.setToolTip(
+            self.tr("Stores recently launched connections in the Recent Connections menu.")
+        )
+        recent_history_val = self.settings.value("save_recent_history", "true")
+        self.recent_history_check.setChecked(
+            recent_history_val == "true" or recent_history_val is True
+        )
+
         help_text = QLabel(
             self.tr(
                 "Prevents terminal flashing by checking credentials first. "
@@ -118,6 +136,8 @@ class SettingsDialog(QDialog):
         gen_layout.addWidget(help_text)
         gen_layout.addWidget(self.update_check)
         gen_layout.addWidget(self.connection_test_debug_check)
+        gen_layout.addWidget(self.close_to_tray_check)
+        gen_layout.addWidget(self.recent_history_check)
 
         # Theme Preference
         theme_label = QLabel(self.tr("Theme Preference:"))
@@ -196,6 +216,8 @@ class SettingsDialog(QDialog):
             "verify_credentials": self.verify_check.isChecked(),
             "check_updates_startup": self.update_check.isChecked(),
             "connection_test_debug": self.connection_test_debug_check.isChecked(),
+            "close_to_tray": self.close_to_tray_check.isChecked(),
+            "save_recent_history": self.recent_history_check.isChecked(),
             "theme_preference": theme_map.get(self.theme_combo.currentIndex(), "System"),
             "language": self.lang_combo.currentData(),
             "column_visibility": {idx: check.isChecked() for idx, check in self.col_checks},

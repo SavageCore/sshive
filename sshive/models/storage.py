@@ -1,6 +1,7 @@
 """Storage module for SSH connections."""
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
@@ -41,6 +42,28 @@ class ConnectionStorage:
         )
         return config_dir / "connections.json"
 
+    def _load_data(self) -> dict:
+        """Load raw storage JSON with defaults.
+
+        Returns:
+            Parsed storage payload with required keys.
+        """
+        with open(self.config_file, encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            raise ValueError("Storage file must contain a JSON object")
+
+        data.setdefault("version", "1.0")
+        data.setdefault("connections", [])
+        data.setdefault("recent_connections", [])
+        return data
+
+    def _save_data(self, data: dict) -> None:
+        """Save full storage payload to disk."""
+        with open(self.config_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
     def load_connections(self) -> list[SSHConnection]:
         """Load all connections from storage.
 
@@ -48,8 +71,7 @@ class ConnectionStorage:
             List of SSHConnection objects
         """
         try:
-            with open(self.config_file, encoding="utf-8") as f:
-                data = json.load(f)
+            data = self._load_data()
 
             raw_connections = data.get("connections", [])
             needs_migration = False
@@ -77,10 +99,14 @@ class ConnectionStorage:
         Args:
             connections: List of SSHConnection objects to save
         """
-        data = {"version": "1.0", "connections": [conn.to_dict() for conn in connections]}
+        try:
+            data = self._load_data()
+        except (json.JSONDecodeError, OSError, ValueError):
+            data = {"version": "1.0", "recent_connections": []}
 
-        with open(self.config_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        data["version"] = "1.0"
+        data["connections"] = [conn.to_dict() for conn in connections]
+        self._save_data(data)
 
     def add_connection(self, connection: SSHConnection) -> None:
         """Add a new connection.
@@ -123,6 +149,17 @@ class ConnectionStorage:
         connections = [conn for conn in connections if conn.id != connection_id]
         self.save_connections(connections)
 
+        try:
+            data = self._load_data()
+            data["recent_connections"] = [
+                entry
+                for entry in data.get("recent_connections", [])
+                if entry.get("id") != connection_id
+            ]
+            self._save_data(data)
+        except (json.JSONDecodeError, OSError, ValueError):
+            return
+
     def get_groups(self) -> list[str]:
         """Get list of unique group names.
 
@@ -132,3 +169,78 @@ class ConnectionStorage:
         connections = self.load_connections()
         groups = {conn.group for conn in connections if conn.group}
         return sorted(groups)
+
+    def get_recent_connections(self, limit: int = 10) -> list[dict]:
+        """Return recent connection usage entries in newest-first order."""
+        try:
+            data = self._load_data()
+        except (json.JSONDecodeError, OSError, ValueError):
+            return []
+
+        recent = data.get("recent_connections", [])
+        if not isinstance(recent, list):
+            return []
+
+        sanitized: list[dict] = []
+        for entry in recent:
+            if not isinstance(entry, dict):
+                continue
+
+            connection_id = str(entry.get("id", "")).strip()
+            if not connection_id:
+                continue
+
+            sanitized.append(
+                {
+                    "id": connection_id,
+                    "name": str(entry.get("name", "")).strip(),
+                    "host": str(entry.get("host", "")).strip(),
+                    "user": str(entry.get("user", "")).strip(),
+                    "port": int(entry.get("port", 22)),
+                    "last_connected_at": str(entry.get("last_connected_at", "")).strip(),
+                }
+            )
+
+            if len(sanitized) >= limit:
+                break
+
+        return sanitized
+
+    def record_connection_used(self, connection: SSHConnection, max_entries: int = 10) -> None:
+        """Record a successful connection launch in recent history."""
+        try:
+            data = self._load_data()
+        except (json.JSONDecodeError, OSError, ValueError):
+            return
+
+        recent = data.get("recent_connections", [])
+        if not isinstance(recent, list):
+            recent = []
+
+        timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        entry = {
+            "id": connection.id,
+            "name": connection.name,
+            "host": connection.host,
+            "user": connection.user,
+            "port": connection.port,
+            "last_connected_at": timestamp,
+        }
+
+        deduplicated = [
+            item for item in recent if isinstance(item, dict) and item.get("id") != connection.id
+        ]
+        deduplicated.insert(0, entry)
+
+        data["recent_connections"] = deduplicated[:max_entries]
+        self._save_data(data)
+
+    def clear_recent_connections(self) -> None:
+        """Clear all recent connection history entries."""
+        try:
+            data = self._load_data()
+        except (json.JSONDecodeError, OSError, ValueError):
+            return
+
+        data["recent_connections"] = []
+        self._save_data(data)

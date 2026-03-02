@@ -172,3 +172,87 @@ class TestConnectionStorage:
         assert loaded[0].port == 2222
         assert "custom_key" in loaded[0].key_path
         assert loaded[0].group == "TestGroup"
+
+    def test_record_connection_used_persists_recent_history(self, storage):
+        """Successful connection usage is persisted in recent history."""
+        conn = SSHConnection(name="Prod", host="prod.example.com", user="root", port=2222)
+        storage.add_connection(conn)
+
+        storage.record_connection_used(conn)
+        recent = storage.get_recent_connections()
+
+        assert len(recent) == 1
+        assert recent[0]["id"] == conn.id
+        assert recent[0]["name"] == "Prod"
+        assert recent[0]["host"] == "prod.example.com"
+        assert recent[0]["user"] == "root"
+        assert recent[0]["port"] == 2222
+        assert recent[0]["last_connected_at"]
+
+    def test_record_connection_used_deduplicates_and_bubbles_to_top(self, storage):
+        """Reconnecting to an entry moves it to the top without duplicates."""
+        conn_a = SSHConnection(name="A", host="a.example.com", user="alice")
+        conn_b = SSHConnection(name="B", host="b.example.com", user="bob")
+        storage.save_connections([conn_a, conn_b])
+
+        storage.record_connection_used(conn_a)
+        storage.record_connection_used(conn_b)
+        storage.record_connection_used(conn_a)
+
+        recent = storage.get_recent_connections()
+        assert [item["id"] for item in recent] == [conn_a.id, conn_b.id]
+
+    def test_record_connection_used_respects_max_entries(self, storage):
+        """Recent history keeps only configured max number of entries."""
+        connections = [
+            SSHConnection(name=f"Server {i}", host=f"h{i}.example.com", user="user")
+            for i in range(12)
+        ]
+        storage.save_connections(connections)
+
+        for conn in connections:
+            storage.record_connection_used(conn, max_entries=10)
+
+        recent = storage.get_recent_connections(limit=20)
+        assert len(recent) == 10
+
+    def test_delete_connection_removes_recent_history_entry(self, storage):
+        """Deleting a connection also removes it from recent history."""
+        keep_conn = SSHConnection(name="Keep", host="keep.example.com", user="k")
+        drop_conn = SSHConnection(name="Drop", host="drop.example.com", user="d")
+        storage.save_connections([keep_conn, drop_conn])
+
+        storage.record_connection_used(keep_conn)
+        storage.record_connection_used(drop_conn)
+        storage.delete_connection(drop_conn.id)
+
+        recent = storage.get_recent_connections()
+        assert [item["id"] for item in recent] == [keep_conn.id]
+
+    def test_save_connections_preserves_recent_history(self, storage):
+        """Saving connections does not wipe existing recent history."""
+        conn = SSHConnection(name="Persist", host="persist.example.com", user="user")
+        storage.add_connection(conn)
+        storage.record_connection_used(conn)
+
+        updated = SSHConnection(
+            name="Persist Updated",
+            host="persist.example.com",
+            user="user",
+            id=conn.id,
+        )
+        storage.save_connections([updated])
+
+        recent = storage.get_recent_connections()
+        assert len(recent) == 1
+        assert recent[0]["id"] == conn.id
+
+    def test_clear_recent_connections_removes_all_entries(self, storage):
+        """clear_recent_connections removes all saved recent history entries."""
+        conn = SSHConnection(name="Clear Me", host="clear.example.com", user="user")
+        storage.add_connection(conn)
+        storage.record_connection_used(conn)
+
+        storage.clear_recent_connections()
+
+        assert storage.get_recent_connections() == []

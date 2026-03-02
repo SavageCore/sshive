@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import uuid
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from PySide6.QtCore import QSettings, QStandardPaths, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSystemTrayIcon,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -48,6 +51,9 @@ class MainWindow(QMainWindow):
 
         self.storage = ConnectionStorage()
         self.connections: list[SSHConnection] = []
+        self._is_quitting = False
+        self.tray_icon: QSystemTrayIcon | None = None
+        self.tray_toggle_action: QAction | None = None
 
         # Determine icon color based on theme preference
         self.settings = QSettings("sshive", "sshive")
@@ -63,6 +69,7 @@ class MainWindow(QMainWindow):
         self._load_connections()
 
         self.setWindowTitle(self.tr("SSHive - SSH Connection Manager"))
+        self._setup_system_tray()
 
         # Restore window state and geometry (Wayland may only restore size)
         if not self.restoreGeometry(self.settings.value("geometry", b"")):
@@ -85,6 +92,134 @@ class MainWindow(QMainWindow):
         # Start background check if enabled
         if self.settings.value("check_updates_startup", "true") == "true":
             self.updater.check_for_updates()
+
+    def _setup_system_tray(self):
+        """Create and show the system tray icon and menu."""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        QApplication.setQuitOnLastWindowClosed(False)
+
+        tray_icon = self.windowIcon()
+        if tray_icon.isNull():
+            tray_icon = qta.icon("fa5s.server", color=self.icon_color)
+
+        self.tray_icon = QSystemTrayIcon(tray_icon, self)
+        self.tray_icon.setToolTip(self.tr("SSHive"))
+
+        tray_menu = QMenu(self)
+        self.tray_toggle_action = QAction(self.tr("Hide"), self)
+        self.tray_toggle_action.triggered.connect(self._toggle_window_visibility)
+        tray_menu.addAction(self.tray_toggle_action)
+
+        tray_menu.addSeparator()
+
+        quit_action = QAction(self.tr("Quit"), self)
+        quit_action.triggered.connect(self._quit_from_tray)
+        tray_menu.addAction(quit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
+        self._update_tray_toggle_action()
+
+    @staticmethod
+    def _setting_to_bool(value, default: bool = False) -> bool:
+        """Convert QSettings-style values to bool."""
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() == "true"
+
+    @staticmethod
+    def _is_test_mode() -> bool:
+        """Check if running in test environment."""
+        return "PYTEST_CURRENT_TEST" in os.environ or "CI" in os.environ
+
+    def _update_tray_toggle_action(self):
+        """Update tray menu label based on window visibility."""
+        if not self.tray_toggle_action:
+            return
+
+        is_window_visible = self.isVisible() and not self.isMinimized()
+        self.tray_toggle_action.setText(self.tr("Hide") if is_window_visible else self.tr("Show"))
+
+    def _toggle_window_visibility(self):
+        """Toggle main window visibility from the tray menu."""
+        is_window_visible = self.isVisible() and not self.isMinimized()
+        if is_window_visible:
+            self.hide()
+        else:
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+
+        self._update_tray_toggle_action()
+
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason):
+        """Handle tray icon click interactions."""
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._toggle_window_visibility()
+
+    def _quit_from_tray(self):
+        """Exit the application from tray menu."""
+        self._is_quitting = True
+        if self.tray_icon:
+            self.tray_icon.hide()
+        QApplication.quit()
+
+    def _show_first_tray_close_hint(self):
+        """Show a one-time notification that the app is still running in tray."""
+        if not self.tray_icon or not QSystemTrayIcon.supportsMessages() or self._is_test_mode():
+            return
+
+        hint_seen = self._setting_to_bool(
+            self.settings.value("tray_close_hint_shown", "false"), default=False
+        )
+        if hint_seen:
+            return
+
+        self.tray_icon.showMessage(
+            self.tr("SSHive is still running"),
+            self.tr("SSHive was minimized to the system tray. Use the tray icon to reopen it."),
+            QSystemTrayIcon.MessageIcon.Information,
+            4000,
+        )
+        self.settings.setValue("tray_close_hint_shown", "true")
+
+    def _prompt_close_behavior(self) -> tuple[bool | None, bool]:
+        """Ask user what to do when the window is closed for the first time.
+
+        Returns:
+            Tuple of (close_to_tray, remember_choice).
+            close_to_tray is None when the dialog is cancelled.
+        """
+        msg = QMessageBox(self)
+        msg.setWindowTitle(self.tr("Close Behavior"))
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setText(self.tr("When closing SSHive, what should happen?"))
+        msg.setInformativeText(self.tr("You can change this later in Settings."))
+
+        tray_button = msg.addButton(self.tr("Close to Tray"), QMessageBox.ButtonRole.AcceptRole)
+        quit_button = msg.addButton(self.tr("Quit App"), QMessageBox.ButtonRole.DestructiveRole)
+        msg.addButton(QMessageBox.StandardButton.Cancel)
+
+        remember_check = QCheckBox(self.tr("Remember my choice"), msg)
+        remember_check.setChecked(True)
+        msg.setCheckBox(remember_check)
+
+        msg.exec()
+
+        clicked = msg.clickedButton()
+        if clicked == tray_button:
+            return True, remember_check.isChecked()
+        if clicked == quit_button:
+            return False, remember_check.isChecked()
+        return None, remember_check.isChecked()
 
     def _update_column_stretch(self):
         """Update the stretch mode of the last visible column."""
@@ -217,6 +352,12 @@ class MainWindow(QMainWindow):
             lambda: self.updater.check_for_updates(force=True)
         )
         self.settings_menu.addAction(self.check_updates_action)
+
+        self.recent_menu = self.settings_menu.addMenu(self.tr("Recent Connections"))
+        self.recent_menu.aboutToShow.connect(self._refresh_recent_connections_menu)
+
+        self.clear_recent_action = QAction(self.tr("Clear Recent History"), self)
+        self.clear_recent_action.triggered.connect(self._clear_recent_connections_history)
 
         self.settings_menu.addSeparator()
 
@@ -527,8 +668,45 @@ class MainWindow(QMainWindow):
         return name, host, user, group, icon, port
 
     def closeEvent(self, event):
-        """Handle window close event to save settings."""
+        """Handle window close event to save settings and support tray mode."""
         self._save_settings()
+
+        if self.tray_icon and not self._is_quitting:
+            close_pref = self.settings.value("close_to_tray")
+            close_to_tray: bool | None
+
+            if close_pref is None:
+                # Skip prompt in test mode; default to close-to-tray
+                if self._is_test_mode():
+                    close_to_tray = True
+                else:
+                    close_to_tray, remember_choice = self._prompt_close_behavior()
+
+                    if close_to_tray is None:
+                        event.ignore()
+                        return
+
+                    if remember_choice:
+                        self.settings.setValue("close_to_tray", str(close_to_tray).lower())
+            else:
+                close_to_tray = self._setting_to_bool(close_pref, default=True)
+
+            if close_to_tray:
+                event.ignore()
+                self.hide()
+                self._update_tray_toggle_action()
+                self._show_first_tray_close_hint()
+                return
+
+            self._is_quitting = True
+            self.tray_icon.hide()
+            event.accept()
+            QApplication.quit()
+            return
+
+        if self.tray_icon:
+            self.tray_icon.hide()
+
         super().closeEvent(event)
 
     def _save_settings(self):
@@ -541,6 +719,83 @@ class MainWindow(QMainWindow):
         """Load connections from storage and populate tree."""
         self.connections = self.storage.load_connections()
         self._populate_tree()
+
+    def _find_connection_by_id(self, connection_id: str) -> SSHConnection | None:
+        """Find a loaded connection by ID."""
+        for connection in self.connections:
+            if connection.id == connection_id:
+                return connection
+        return None
+
+    def _refresh_recent_connections_menu(self):
+        """Rebuild the recent connections submenu from persisted history."""
+        self.recent_menu.clear()
+
+        if not self._setting_to_bool(self.settings.value("save_recent_history", "true"), True):
+            disabled_action = self.recent_menu.addAction(self.tr("History is disabled in Settings"))
+            disabled_action.setEnabled(False)
+            return
+
+        recent_entries = self.storage.get_recent_connections(limit=10)
+
+        if not recent_entries:
+            empty_action = self.recent_menu.addAction(self.tr("No recent connections"))
+            empty_action.setEnabled(False)
+            self.recent_menu.addSeparator()
+            self.clear_recent_action.setEnabled(False)
+            self.recent_menu.addAction(self.clear_recent_action)
+            return
+
+        for entry in recent_entries:
+            display_name = entry["name"] or self.tr("Unnamed")
+            details = self.tr("{}@{}:{}").format(entry["user"], entry["host"], entry["port"])
+            action = self.recent_menu.addAction(f"{display_name} ({details})")
+
+            is_available = self._find_connection_by_id(entry["id"]) is not None
+            action.setEnabled(is_available)
+            if not is_available:
+                action.setToolTip(self.tr("Connection no longer exists."))
+                continue
+
+            action.triggered.connect(
+                lambda _checked=False, connection_id=entry["id"]: self._connect_recent_by_id(
+                    connection_id
+                )
+            )
+
+        self.recent_menu.addSeparator()
+        self.clear_recent_action.setEnabled(True)
+        self.recent_menu.addAction(self.clear_recent_action)
+
+    def _clear_recent_connections_history(self):
+        """Clear persisted recent connection history after confirmation."""
+        reply = QMessageBox.question(
+            self,
+            self.tr("Clear Recent History"),
+            self.tr("Clear all recent connection history?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        self.storage.clear_recent_connections()
+        self._refresh_recent_connections_menu()
+
+    def _connect_recent_by_id(self, connection_id: str):
+        """Connect to a recent connection by its ID."""
+        connection = self._find_connection_by_id(connection_id)
+        if connection is None:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Not Found"),
+                self.tr("The selected connection no longer exists."),
+            )
+            self._refresh_recent_connections_menu()
+            return
+
+        self._connect_with_connection(connection)
 
     def _populate_tree(self):
         """Populate tree widget with connections grouped by category."""
@@ -852,6 +1107,11 @@ class MainWindow(QMainWindow):
         if not connection:
             return  # Clicked on group, not connection
 
+        self._connect_with_connection(connection)
+
+    def _connect_with_connection(self, connection: SSHConnection):
+        """Launch SSH connection for a specific connection object."""
+
         # Test connection validity (dependency/path checks)
         success, error_msg = SSHLauncher.test_connection(connection)
         if not success:
@@ -896,6 +1156,10 @@ class MainWindow(QMainWindow):
                     "Check that you have a terminal emulator installed."
                 ).format(connection.name),
             )
+            return
+
+        if self._setting_to_bool(self.settings.value("save_recent_history", "true"), True):
+            self.storage.record_connection_used(connection)
 
     def _show_context_menu(self, position):
         """Show context menu for tree items.
@@ -974,6 +1238,9 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self, self.settings, column_names, hidden_columns)
         if dialog.exec():
             settings = dialog.get_settings()
+            previous_save_recent_history = self._setting_to_bool(
+                self.settings.value("save_recent_history", "true"), True
+            )
 
             # Update verification setting
             self.settings.setValue(
@@ -989,6 +1256,27 @@ class MainWindow(QMainWindow):
             self.settings.setValue(
                 "connection_test_debug", str(settings["connection_test_debug"]).lower()
             )
+
+            # Update close behavior setting
+            self.settings.setValue("close_to_tray", str(settings["close_to_tray"]).lower())
+
+            # Update recent history persistence setting
+            self.settings.setValue(
+                "save_recent_history", str(settings["save_recent_history"]).lower()
+            )
+
+            if previous_save_recent_history and not settings["save_recent_history"]:
+                has_recent_history = bool(self.storage.get_recent_connections(limit=1))
+                if has_recent_history:
+                    clear_reply = QMessageBox.question(
+                        self,
+                        self.tr("Clear Recent History"),
+                        self.tr("Recent connection history exists. Do you want to clear it now?"),
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No,
+                    )
+                    if clear_reply == QMessageBox.StandardButton.Yes:
+                        self.storage.clear_recent_connections()
 
             # Update column visibility
             for idx, visible in settings["column_visibility"].items():
