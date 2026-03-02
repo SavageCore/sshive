@@ -114,6 +114,9 @@ class ThemeManager:
                 color: #ffffff;
                 selection-background-color: #505050;
             }
+            QLineEdit::placeholder {
+                color: #888888;
+            }
             QLineEdit:focus {
                 border-color: #4282da;
             }
@@ -207,6 +210,10 @@ class ThemeManager:
                 padding: 4px 8px;
                 border: 1px solid rgba(0, 0, 0, 0.3);
                 border-radius: 4px;
+                color: #000000;
+            }
+            QLineEdit::placeholder {
+                color: #666666;
             }
             QLineEdit:focus {
                 border-color: #0078D7;

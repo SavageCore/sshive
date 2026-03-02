@@ -196,6 +196,286 @@ class MainWindow(QMainWindow):
         )
         self.settings.setValue("tray_close_hint_shown", "true")
 
+    def handle_ipc_command(self, args: list[str]):
+        """Handle commands received via IPC from other instances.
+
+        Args:
+            args: List of command flags (e.g., ['--show', '--quick-connect']).
+        """
+        for arg in args:
+            if arg == "--show":
+                self._show_window()
+            elif arg == "--quick-connect":
+                self._show_quick_connect_dialog()
+            elif arg == "--recent":
+                self._show_recent_connections_menu()
+
+    def _show_window(self):
+        """Show and focus the main window."""
+        if self.isVisible() and not self.isMinimized():
+            # Already visible, minimize/hide it instead
+            self.hide()
+        else:
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+
+        self._update_tray_toggle_action()
+
+    def _create_connection_popup_dialog(
+        self,
+        title: str,
+        populate_callback,
+        select_callback,
+        has_search: bool = False,
+        header_widget=None,
+    ):
+        """Create a reusable popup dialog for showing connections.
+
+        Args:
+            title: Dialog window title
+            populate_callback: Function(list_widget, search_text) that populates the list
+            select_callback: Function(connection_id) called when a connection is selected
+            has_search: Whether to show a search input field
+            header_widget: Optional widget to display at the top (e.g., QLabel, QLineEdit)
+        """
+        from PySide6.QtCore import QEvent, QObject, Qt
+        from PySide6.QtGui import QKeyEvent
+        from PySide6.QtWidgets import QDialog, QHBoxLayout, QListWidget, QVBoxLayout
+
+        # Ensure main window is activated (required for Wayland grabbing popup)
+        self.raise_()
+        self.activateWindow()
+
+        # Create popup dialog with proper parent for Wayland compatibility
+        dialog = QDialog(self, Qt.WindowType.Popup | Qt.WindowType.Tool)
+        dialog.setWindowTitle(title)
+        dialog.setFixedSize(750, 640)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        # Add header widget if provided (search input or label)
+        focus_widget = None
+        if header_widget:
+            layout.addWidget(header_widget)
+            focus_widget = header_widget
+
+        # Connection list
+        connection_list = QListWidget(self)
+        layout.addWidget(connection_list)
+        if not focus_widget:
+            focus_widget = connection_list
+
+        # Bottom button bar
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+
+        show_main_btn = QPushButton(
+            qta.icon("fa5s.window-restore", color=self.icon_color),
+            self.tr("Show Main Window"),
+            self,
+        )
+        show_main_btn.clicked.connect(
+            lambda: (dialog.close(), self.show(), self.raise_(), self.activateWindow())
+        )
+        button_layout.addWidget(show_main_btn)
+
+        layout.addLayout(button_layout)
+        dialog.setLayout(layout)
+
+        # Setup connection selection handler
+        def on_connection_selected():
+            if connection_list.currentItem():
+                conn_id = connection_list.currentItem().data(Qt.ItemDataRole.UserRole)
+                if conn_id:
+                    dialog.close()
+                    select_callback(conn_id)
+
+        connection_list.itemDoubleClicked.connect(on_connection_selected)
+
+        # Install event filter for keyboard navigation
+        class KeyboardNavigationFilter(QObject):
+            def eventFilter(self, obj, event):
+                if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
+                    if event.key() == Qt.Key.Key_Down:
+                        if connection_list.count() > 0:
+                            connection_list.setCurrentRow(
+                                min(connection_list.currentRow() + 1, connection_list.count() - 1)
+                            )
+                        return True
+                    elif event.key() == Qt.Key.Key_Up:
+                        if connection_list.count() > 0:
+                            connection_list.setCurrentRow(max(connection_list.currentRow() - 1, 0))
+                        return True
+                    elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                        on_connection_selected()
+                        return True
+                return False
+
+        # Keep reference to prevent garbage collection
+        event_filter = KeyboardNavigationFilter()
+        dialog._event_filter = event_filter
+        if header_widget:
+            header_widget.installEventFilter(event_filter)
+        else:
+            connection_list.installEventFilter(event_filter)
+
+        # Connect search input to update list if it's a QLineEdit
+        if has_search and header_widget:
+            header_widget.textChanged.connect(
+                lambda: populate_callback(connection_list, header_widget.text())
+            )
+
+        # Initial population
+        populate_callback(connection_list, "")
+
+        # Position dialog at top center of screen
+        screen_geometry = self.screen().geometry()
+        x = screen_geometry.left() + (screen_geometry.width() - 750) // 2
+        y = screen_geometry.top() + 50
+        dialog.setGeometry(x, y, 750, 640)
+
+        dialog.show()
+        if focus_widget:
+            focus_widget.setFocus()
+
+    def _show_quick_connect_dialog(self):
+        """Show a quick connection search popup at the top center of the screen."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QListWidgetItem
+
+        # Create search input
+        search_input = QLineEdit(self)
+        search_input.setPlaceholderText(self.tr("Type to filter connections..."))
+
+        def populate_quick_connect(list_widget, filter_text):
+            """Populate list with filtered connections."""
+            list_widget.clear()
+
+            # Group connections by group name
+            grouped_conns: dict[str, list[SSHConnection]] = {}
+            for conn in self.connections:
+                if not isinstance(conn, SSHConnection):
+                    continue
+                group_name = conn.group or self.tr("Default")
+                if group_name not in grouped_conns:
+                    grouped_conns[group_name] = []
+                grouped_conns[group_name].append(conn)
+
+            # Add items in sorted order
+            for group_name in sorted(grouped_conns.keys()):
+                for conn in sorted(grouped_conns[group_name], key=lambda c: c.name):
+                    display_text = f"{conn.name} ({conn.user}@{conn.host}:{conn.port})"
+                    if filter_text.lower() in display_text.lower():
+                        item = QListWidgetItem(display_text)
+                        item.setData(Qt.ItemDataRole.UserRole, conn.id)
+                        list_widget.addItem(item)
+
+            # Auto-select first item
+            if list_widget.count() > 0:
+                list_widget.setCurrentRow(0)
+
+        def on_select(conn_id):
+            """Launch the selected connection."""
+            for conn in self.connections:
+                if isinstance(conn, SSHConnection) and conn.id == conn_id:
+                    self._connect_with_connection(conn)
+                    break
+
+        # Create the dialog
+        self._create_connection_popup_dialog(
+            self.tr("SSHive - Quick Connect"),
+            populate_quick_connect,
+            on_select,
+            has_search=True,
+            header_widget=search_input,
+        )
+
+    def _show_recent_connections_menu(self):
+        """Show a recent connections popup dialog."""
+        import random
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QLabel, QListWidgetItem
+
+        # Create info label
+        info_label = QLabel(self.tr("Your most recently used connections:"))
+
+        def populate_recent(list_widget, _filter_text):
+            """Populate list with recent connections."""
+            list_widget.clear()
+
+            # Handle incognito mode - show 3-6 fake recent connections
+            if self.incognito_mode:
+                # Use a deterministic seed based on the mode toggle to keep it consistent
+                rng = random.Random(42)
+                num_fake = rng.randint(3, 6)
+
+                for i in range(num_fake):
+                    fake_id = f"fake-recent-{i}"
+                    name, host, user, _, _, port = self._get_fake_data(fake_id, service_index=i)
+
+                    display_text = f"{name} ({user}@{host}:{port})"
+                    item = QListWidgetItem(display_text)
+                    item.setData(Qt.ItemDataRole.UserRole, fake_id)
+                    list_widget.addItem(item)
+
+                # Auto-select first item
+                if list_widget.count() > 0:
+                    list_widget.setCurrentRow(0)
+                return
+
+            if not self._setting_to_bool(self.settings.value("save_recent_history", "true"), True):
+                item = QListWidgetItem(self.tr("History is disabled in Settings"))
+                item.setFlags(Qt.ItemFlag.NoItemFlags)
+                list_widget.addItem(item)
+                return
+
+            recent_entries = self.storage.get_recent_connections(limit=10)
+
+            if not recent_entries:
+                item = QListWidgetItem(self.tr("No recent connections"))
+                item.setFlags(Qt.ItemFlag.NoItemFlags)
+                list_widget.addItem(item)
+                return
+
+            for entry in recent_entries:
+                display_name = entry["name"] or self.tr("Unnamed")
+                details = self.tr("{}@{}:{}").format(entry["user"], entry["host"], entry["port"])
+                display_text = f"{display_name} ({details})"
+
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.ItemDataRole.UserRole, entry["id"])
+
+                # Check if connection still exists
+                is_available = self._find_connection_by_id(entry["id"]) is not None
+                if not is_available:
+                    item.setFlags(Qt.ItemFlag.NoItemFlags)
+                    item.setToolTip(self.tr("Connection no longer exists."))
+
+                list_widget.addItem(item)
+
+            # Auto-select first available item
+            for i in range(list_widget.count()):
+                if list_widget.item(i).flags() & Qt.ItemFlag.ItemIsEnabled:
+                    list_widget.setCurrentRow(i)
+                    break
+
+        def on_select(conn_id):
+            """Launch the selected recent connection."""
+            # In incognito mode, don't try to launch fake connections
+            if not self.incognito_mode:
+                self._connect_recent_by_id(conn_id)
+
+        self._create_connection_popup_dialog(
+            self.tr("SSHive - Recent Connections"),
+            populate_recent,
+            on_select,
+            has_search=False,
+            header_widget=info_label,
+        )
+
     def _prompt_close_behavior(self) -> tuple[bool | None, bool]:
         """Ask user what to do when the window is closed for the first time.
 
@@ -410,6 +690,15 @@ class MainWindow(QMainWindow):
         about_action.setToolTip(self.tr("About SSHive."))
         about_action.triggered.connect(self._show_about_dialog)
         self.settings_menu.addAction(about_action)
+
+        self.settings_menu.addSeparator()
+
+        # Quit action
+        quit_icon = qta.icon("fa5s.times", color=self.icon_color)
+        quit_action = QAction(quit_icon, self.tr("Quit"), self)
+        quit_action.setToolTip(self.tr("Exit SSHive."))
+        quit_action.triggered.connect(QApplication.quit)
+        self.settings_menu.addAction(quit_action)
 
         self.settings_btn.setMenu(self.settings_menu)
 

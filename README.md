@@ -168,10 +168,15 @@ For full instructions and supported formats, see the [PuTTY/KiTTY Import Guide](
 
 ### Keyboard Shortcuts
 
+**In-App Shortcuts:**
 - `Ctrl+I` - Toggle Incognito Mode (obfuscates server list)
 - `Enter` - Connect to selected server (Or double-click)
 - `Delete` - Delete selected connection
 - `Ctrl+N` - New connection
+
+**Global Shortcuts:**
+
+You can access SSHive from anywhere on your system using global keyboard shortcuts. See the [Global Keyboard Shortcuts Guide](docs/KEYBOARD_SHORTCUTS.md) for setup instructions on GNOME, KDE, and other desktop environments.
 
 ## Requirements & Dependencies
 
