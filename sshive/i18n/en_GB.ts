@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1">
+<TS version="2.1" language="en_GB">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -26,7 +26,7 @@
     <message>
         <location filename="../ui/about_dialog.py" line="62"/>
         <source>&lt;b&gt;License Information:&lt;/b&gt;</source>
-        <translation>&lt;b&gt;License Information:&lt;/b&gt;</translation>
+        <translation>&lt;b&gt;Licence Information:&lt;/b&gt;</translation>
     </message>
     <message>
         <location filename="../ui/about_dialog.py" line="69"/>
@@ -36,7 +36,7 @@
     <message>
         <location filename="../ui/about_dialog.py" line="71"/>
         <source>Licensed under the MIT License.</source>
-        <translation>Licensed under the MIT License.</translation>
+        <translation>Licensed under the MIT Licence.</translation>
     </message>
     <message>
         <location filename="../ui/about_dialog.py" line="74"/>
