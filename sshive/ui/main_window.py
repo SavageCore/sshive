@@ -445,7 +445,7 @@ class MainWindow(QMainWindow):
 
         button_layout.addStretch()
 
-        test_icon = qta.icon("fa5s.stethoscope", color=self.icon_color)
+        test_icon = qta.icon("fa5s.flask", color=self.icon_color)
         self.test_btn = QPushButton(self.tr("Test"))
         self.test_btn.setIcon(test_icon)
         self.test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1144,19 +1144,53 @@ class MainWindow(QMainWindow):
             finally:
                 QApplication.restoreOverrideCursor()
 
-        # Launch connection
-        success = SSHLauncher.launch(connection)
+        # Launch connection (shell or tunnel)
+        if connection.connection_type == "tunnel":
+            # Launch tunnel in background
+            success, error = SSHLauncher.launch_tunnel(connection)
+            if not success:
+                QMessageBox.warning(
+                    self,
+                    self.tr("Tunnel Error"),
+                    self.tr("Failed to launch tunnel for {}.\n\n{}").format(connection.name, error),
+                )
+                return
 
-        if not success:
-            QMessageBox.warning(
-                self,
-                self.tr("Launch Error"),
-                self.tr(
-                    "Failed to launch terminal for {}.\n\n"
-                    "Check that you have a terminal emulator installed."
-                ).format(connection.name),
+            # Show success message with tunnel details
+            tunnel_info = "\n".join(
+                [
+                    f"• {pf.name}: "
+                    + (
+                        f"localhost:{pf.local_port} → {pf.remote_bind_address}:{pf.remote_port}"
+                        if pf.forward_type == "local"
+                        else f"{pf.remote_port} ← localhost:{pf.local_port}"
+                        if pf.forward_type == "remote"
+                        else f"SOCKS localhost:{pf.local_port}"
+                    )
+                    for pf in connection.port_forwards
+                ]
             )
-            return
+            QMessageBox.information(
+                self,
+                self.tr("Tunnel Started"),
+                self.tr("Tunnel for {} is now running in the background.\n\n{}").format(
+                    connection.name, tunnel_info
+                ),
+            )
+        else:
+            # Launch terminal shell connection
+            success = SSHLauncher.launch(connection)
+
+            if not success:
+                QMessageBox.warning(
+                    self,
+                    self.tr("Launch Error"),
+                    self.tr(
+                        "Failed to launch terminal for {}.\n\n"
+                        "Check that you have a terminal emulator installed."
+                    ).format(connection.name),
+                )
+                return
 
         if self._setting_to_bool(self.settings.value("save_recent_history", "true"), True):
             self.storage.record_connection_used(connection)
@@ -1183,7 +1217,7 @@ class MainWindow(QMainWindow):
         connect_action.triggered.connect(lambda: self._connect_to_server(item))
 
         test_action = menu.addAction(
-            qta.icon("fa5s.stethoscope", color=self.icon_color), self.tr("Test Connection")
+            qta.icon("fa5s.flask", color=self.icon_color), self.tr("Test Connection")
         )
         test_action.triggered.connect(lambda: self._test_connection(item))
 

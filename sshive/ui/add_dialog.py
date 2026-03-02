@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QSpinBox,
@@ -23,11 +25,206 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from sshive.models.connection import SSHConnection
+from sshive.models.connection import PortForward, SSHConnection
 from sshive.ssh.launcher import SSHLauncher
 from sshive.ui.icon_manager import IconManager
 from sshive.ui.theme import ThemeManager
 from sshive.ui.utils import show_connection_test_debug_dialog
+
+
+class PortForwardDialog(QDialog):
+    """Dialog for adding or editing a single port forward rule."""
+
+    def __init__(
+        self,
+        parent=None,
+        port_forward: PortForward | None = None,
+    ):
+        """Initialize port forward dialog.
+
+        Args:
+            parent: Parent widget
+            port_forward: Existing port forward to edit (None for new)
+        """
+        super().__init__(parent)
+        self.port_forward = port_forward
+
+        self.setWindowTitle(
+            self.tr("Edit Port Forward") if port_forward else self.tr("Add Port Forward")
+        )
+        self.setMinimumWidth(500)
+        self._setup_ui()
+
+        if port_forward:
+            self._populate_fields()
+
+    def _setup_ui(self):
+        """Setup the user interface."""
+        layout = QVBoxLayout()
+
+        form_layout = QFormLayout()
+
+        # Name
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText(self.tr("e.g., Database, Redis, SOCKS Proxy"))
+        form_layout.addRow(self.tr("Name:"), self.name_input)
+
+        # Forward Type with icons and hints
+        type_layout = QHBoxLayout()
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(
+            [
+                self.tr("Local Forward (-L)"),
+                self.tr("Remote Forward (-R)"),
+                self.tr("Dynamic Proxy (-D)"),
+            ]
+        )
+        self.type_combo.currentIndexChanged.connect(self._on_type_changed)
+        type_layout.addWidget(self.type_combo)
+
+        # Add help icon
+        self.type_help_btn = QToolButton()
+        self.type_help_btn.setIcon(qta.icon("fa5s.question", color="steelblue"))
+        self.type_help_btn.setToolTip(
+            self.tr(
+                "<b>Local (-L):</b> Access remote service locally<br>"
+                "localhost:8000 → database.internal:5432<br><br>"
+                "<b>Remote (-R):</b> Share your local service<br>"
+                "9000 ← localhost:8000<br><br>"
+                "<b>Dynamic (-D):</b> SOCKS proxy for all traffic<br>"
+                "localhost:1080 (proxy)"
+            )
+        )
+        self.type_help_btn.setStyleSheet("border: none; padding: 4px;")
+        self.type_help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        type_layout.addWidget(self.type_help_btn)
+        form_layout.addRow(self.tr("Type:"), type_layout)
+
+        # Hint label that changes based on type
+        self.hint_label = QLabel()
+        self.hint_label.setStyleSheet("color: steelblue; font-style: italic; font-size: 10px;")
+        self.hint_label.setWordWrap(True)
+        form_layout.addRow(self.hint_label)
+
+        # Local Port
+        self.local_port_input = QSpinBox()
+        self.local_port_input.setRange(1, 65535)
+        self.local_port_input.setValue(8000)
+        local_port_layout = QHBoxLayout()
+        local_port_layout.addWidget(self.local_port_input)
+        self.local_port_info = QLabel()
+        self.local_port_info.setStyleSheet("color: gray; font-size: 9px;")
+        local_port_layout.addWidget(self.local_port_info)
+        form_layout.addRow(self.tr("Local Port:"), local_port_layout)
+
+        # Remote Port (hidden for dynamic)
+        self.remote_port_label = QLabel(self.tr("Remote Port:"))
+        self.remote_port_input = QSpinBox()
+        self.remote_port_input.setRange(1, 65535)
+        self.remote_port_input.setValue(8000)
+        remote_port_layout = QHBoxLayout()
+        remote_port_layout.addWidget(self.remote_port_input)
+        self.remote_port_info = QLabel()
+        self.remote_port_info.setStyleSheet("color: gray; font-size: 9px;")
+        remote_port_layout.addWidget(self.remote_port_info)
+        form_layout.addRow(self.remote_port_label, remote_port_layout)
+
+        # Remote Bind Address
+        self.remote_bind_label = QLabel(self.tr("Remote Address:"))
+        self.remote_bind_input = QLineEdit()
+        self.remote_bind_input.setPlaceholderText(self.tr("e.g., localhost or db.internal"))
+        self.remote_bind_input.setText("localhost")
+        remote_bind_layout = QHBoxLayout()
+        remote_bind_layout.addWidget(self.remote_bind_input)
+        self.remote_bind_info = QLabel()
+        self.remote_bind_info.setStyleSheet("color: gray; font-size: 9px;")
+        remote_bind_layout.addWidget(self.remote_bind_info)
+        form_layout.addRow(self.remote_bind_label, remote_bind_layout)
+
+        layout.addLayout(form_layout)
+
+        # Buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+        self.setLayout(layout)
+        self._on_type_changed()
+
+    def _on_type_changed(self):
+        """Update UI based on selected forward type."""
+        forward_type = self.type_combo.currentText()
+        is_dynamic = "Dynamic" in forward_type
+        is_local = "Local" in forward_type
+        is_remote = "Remote" in forward_type
+
+        # Update visibility
+        self.remote_port_label.setVisible(not is_dynamic)
+        self.remote_port_input.setVisible(not is_dynamic)
+        self.remote_bind_label.setVisible(not is_dynamic)
+        self.remote_bind_input.setVisible(not is_dynamic)
+
+        # Update hints and labels
+        if is_local:
+            self.hint_label.setText(
+                self.tr("💻 Access a remote service as if it were local on your machine")
+            )
+            self.local_port_info.setText(self.tr("(your computer)"))
+            self.remote_port_info.setText(self.tr("(via bastion)"))
+            self.remote_bind_info.setText(self.tr("(network accessible from bastion)"))
+        elif is_remote:
+            self.hint_label.setText(self.tr("🌐 Share your local service with the remote server"))
+            self.local_port_info.setText(self.tr("(your computer)"))
+            self.remote_port_info.setText(self.tr("(appears on bastion)"))
+            self.remote_bind_info.setText(self.tr("(usually localhost)"))
+        else:  # dynamic
+            self.hint_label.setText(
+                self.tr("🔒 Route all traffic through remote server as a SOCKS proxy")
+            )
+            self.local_port_info.setText(self.tr("(SOCKS proxy port)"))
+            self.remote_port_info.setText("")
+            self.remote_bind_info.setText("")
+
+    def _populate_fields(self):
+        """Populate fields with existing port forward data."""
+        if not self.port_forward:
+            return
+
+        self.name_input.setText(self.port_forward.name)
+
+        type_map = {"local": 0, "remote": 1, "dynamic": 2}
+        self.type_combo.setCurrentIndex(type_map.get(self.port_forward.forward_type, 0))
+
+        self.local_port_input.setValue(self.port_forward.local_port)
+        self.remote_port_input.setValue(self.port_forward.remote_port or 8000)
+        self.remote_bind_input.setText(self.port_forward.remote_bind_address)
+
+    def get_port_forward(self) -> PortForward | None:
+        """Get port forward from form data.
+
+        Returns:
+            PortForward object or None if validation fails
+        """
+        name = self.name_input.text().strip()
+        if not name:
+            return None
+
+        type_map = {0: "local", 1: "remote", 2: "dynamic"}
+        forward_type = type_map.get(self.type_combo.currentIndex(), "local")
+
+        try:
+            return PortForward(
+                name=name,
+                forward_type=forward_type,
+                local_port=self.local_port_input.value(),
+                remote_port=self.remote_port_input.value() if forward_type != "dynamic" else 0,
+                remote_bind_address=self.remote_bind_input.text().strip() or "localhost",
+            )
+        except ValueError:
+            return None
 
 
 class IconDropLabel(QLabel):
@@ -191,6 +388,17 @@ class AddConnectionDialog(QDialog):
         self.group_input.setCurrentText(self.tr("Default"))
         form_layout.addRow(self.tr("Group:"), self.group_input)
 
+        # Connection Type
+        self.connection_type_combo = QComboBox()
+        self.connection_type_combo.addItems(
+            [
+                self.tr("Shell (Terminal)"),
+                self.tr("Tunnel (Background)"),
+            ]
+        )
+        self.connection_type_combo.currentIndexChanged.connect(self._on_connection_type_changed)
+        form_layout.addRow(self.tr("Connection Type:"), self.connection_type_combo)
+
         # Icon
         icon_layout = QHBoxLayout()
         self.icon_input = QLineEdit()
@@ -221,6 +429,46 @@ class AddConnectionDialog(QDialog):
 
         layout.addLayout(form_layout)
 
+        # Port Forwards Section (only visible in tunnel mode)
+        self.port_forwards_widget = QVBoxLayout()
+
+        self.port_forwards_title = QLabel(self.tr("<b>Port Forwarding Rules</b>"))
+        self.port_forwards_title.setStyleSheet("margin-top: 10px;")
+        self.port_forwards_widget.addWidget(self.port_forwards_title)
+
+        # Port forwards list
+        self.port_forwards_list = QListWidget()
+        self.port_forwards_list.setMaximumHeight(150)
+        self.port_forwards_widget.addWidget(self.port_forwards_list)
+
+        # Port forwards buttons
+        self.pf_buttons_layout = QHBoxLayout()
+        self.add_pf_btn = QPushButton(self.tr("Add Forward"))
+        self.add_pf_btn.setIcon(qta.icon("fa5s.plus", color="white"))
+        self.add_pf_btn.clicked.connect(self._add_port_forward)
+        self.edit_pf_btn = QPushButton(self.tr("✎ Edit"))
+        self.edit_pf_btn.clicked.connect(self._edit_port_forward)
+        self.edit_pf_btn.setEnabled(False)
+        self.delete_pf_btn = QPushButton(self.tr("✕ Delete"))
+        self.delete_pf_btn.clicked.connect(self._delete_port_forward)
+        self.delete_pf_btn.setEnabled(False)
+
+        self.port_forwards_list.itemSelectionChanged.connect(self._on_pf_selection_changed)
+
+        self.pf_buttons_layout.addWidget(self.add_pf_btn)
+        self.pf_buttons_layout.addWidget(self.edit_pf_btn)
+        self.pf_buttons_layout.addWidget(self.delete_pf_btn)
+        self.port_forwards_widget.addLayout(self.pf_buttons_layout)
+
+        # Store references to port forwards
+        self.port_forwards: list[PortForward] = []
+
+        # Add port forwards section to main layout
+        layout.addLayout(self.port_forwards_widget)
+
+        # Initially hide port forwards section
+        self._on_connection_type_changed()
+
         # Initialize icon manager
 
         self.icon_manager = IconManager.instance()
@@ -229,8 +477,10 @@ class AddConnectionDialog(QDialog):
 
         # Info label
         info_layout = QHBoxLayout()
-        tip_icon = QLabel()
-        tip_icon.setPixmap(qta.icon("fa5s.lightbulb", color="#FFD700").pixmap(14, 14))
+        self.tip_icon = QLabel()
+        self.tip_icon.setPixmap(qta.icon("fa5s.lightbulb", color="#FFD700").pixmap(14, 14))
+        self.tip_icon.setContentsMargins(0, 1, 5, 0)
+        self.tip_icon.setAlignment(Qt.AlignmentFlag.AlignTop)
         tip_text = QLabel(
             self.tr(
                 "Tip: SSH keys should be in ~/.ssh/ directory. Use ssh-keygen to create one if needed."
@@ -238,9 +488,9 @@ class AddConnectionDialog(QDialog):
         )
         tip_text.setWordWrap(True)
         tip_text.setStyleSheet("color: gray; font-size: 10px;")
-        info_layout.addWidget(tip_icon, 0)
+        info_layout.addWidget(self.tip_icon, 0)
         info_layout.addWidget(tip_text, 1)
-        info_layout.setAlignment(tip_icon, Qt.AlignmentFlag.AlignTop)
+        info_layout.setAlignment(tip_text, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(info_layout)
 
         # Buttons
@@ -250,6 +500,7 @@ class AddConnectionDialog(QDialog):
         self.test_btn = button_box.addButton(
             self.tr("Test"), QDialogButtonBox.ButtonRole.ActionRole
         )
+        self.test_btn.setIcon(qta.icon("fa5s.flask", color="white"))
         self.test_btn.clicked.connect(self._test_connection)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -296,6 +547,15 @@ class AddConnectionDialog(QDialog):
         if self.connection.icon:
             self.icon_input.setText(self.connection.icon)
             self._update_icon_preview(self.connection.icon)
+
+        # Set connection type
+        type_index = 1 if self.connection.connection_type == "tunnel" else 0
+        self.connection_type_combo.setCurrentIndex(type_index)
+
+        # Load port forwards if tunnel
+        if self.connection.port_forwards:
+            self.port_forwards = self.connection.port_forwards.copy()
+            self._refresh_port_forwards_list()
 
     @staticmethod
     def _is_custom_icon_path(value: str) -> bool:
@@ -555,6 +815,73 @@ class AddConnectionDialog(QDialog):
         except ValueError:
             return None
 
+    def _on_connection_type_changed(self):
+        """Show/hide port forwards section based on connection type."""
+        is_tunnel = self.connection_type_combo.currentIndex() == 1
+
+        # Hide/show all port forward related widgets
+        self.port_forwards_title.setVisible(is_tunnel)
+        self.port_forwards_list.setVisible(is_tunnel)
+        self.add_pf_btn.setVisible(is_tunnel)
+        self.edit_pf_btn.setVisible(is_tunnel)
+        self.delete_pf_btn.setVisible(is_tunnel)
+
+    def _add_port_forward(self):
+        """Open dialog to add a new port forward."""
+        dialog = PortForwardDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            pf = dialog.get_port_forward()
+            if pf:
+                self.port_forwards.append(pf)
+                self._refresh_port_forwards_list()
+
+    def _edit_port_forward(self):
+        """Edit the selected port forward."""
+        current_item = self.port_forwards_list.currentItem()
+        if not current_item:
+            return
+
+        index = self.port_forwards_list.row(current_item)
+        if 0 <= index < len(self.port_forwards):
+            dialog = PortForwardDialog(self, self.port_forwards[index])
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                pf = dialog.get_port_forward()
+                if pf:
+                    self.port_forwards[index] = pf
+                    self._refresh_port_forwards_list()
+
+    def _delete_port_forward(self):
+        """Delete the selected port forward."""
+        current_item = self.port_forwards_list.currentItem()
+        if not current_item:
+            return
+
+        index = self.port_forwards_list.row(current_item)
+        if 0 <= index < len(self.port_forwards):
+            self.port_forwards.pop(index)
+            self._refresh_port_forwards_list()
+
+    def _on_pf_selection_changed(self):
+        """Update button states based on port forward selection."""
+        has_selection = self.port_forwards_list.currentItem() is not None
+        self.edit_pf_btn.setEnabled(has_selection)
+        self.delete_pf_btn.setEnabled(has_selection)
+
+    def _refresh_port_forwards_list(self):
+        """Refresh the port forwards list widget."""
+        self.port_forwards_list.clear()
+        for pf in self.port_forwards:
+            # Create descriptive text for each forward
+            if pf.forward_type == "local":
+                text = f"🔗 {pf.name}: localhost:{pf.local_port} ← {pf.remote_bind_address}:{pf.remote_port}"
+            elif pf.forward_type == "remote":
+                text = f"🔗 {pf.name}: {pf.remote_port} ← localhost:{pf.local_port}"
+            else:  # dynamic
+                text = f"🔗 {pf.name}: SOCKS localhost:{pf.local_port}"
+
+            item = QListWidgetItem(text)
+            self.port_forwards_list.addItem(item)
+
     def _test_connection(self):
         """Run full connection test (preflight + network + auth) for dialog form values."""
         connection = self._build_connection_for_test()
@@ -609,6 +936,10 @@ class AddConnectionDialog(QDialog):
             if persisted_path:
                 icon = persisted_path
 
+        # Get connection type and port forwards
+        connection_type = "tunnel" if self.connection_type_combo.currentIndex() == 1 else "shell"
+        port_forwards = self.port_forwards if connection_type == "tunnel" else []
+
         try:
             if self.connection:
                 # Update the existing object
@@ -620,6 +951,8 @@ class AddConnectionDialog(QDialog):
                 self.connection.password = password
                 self.connection.group = group
                 self.connection.icon = icon
+                self.connection.connection_type = connection_type
+                self.connection.port_forwards = port_forwards
                 return self.connection
             else:
                 # Create new connection
@@ -632,6 +965,8 @@ class AddConnectionDialog(QDialog):
                     password=password,
                     group=group,
                     icon=icon,
+                    connection_type=connection_type,
+                    port_forwards=port_forwards,
                 )
         except ValueError as e:
             print(f"Validation error: {e}")

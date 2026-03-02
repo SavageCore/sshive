@@ -218,6 +218,126 @@ class SSHLauncher:
             return False
 
     @staticmethod
+    def launch_tunnel(connection: SSHConnection) -> tuple[bool, str | None]:
+        """Launch SSH tunnel in background.
+
+        Creates a persistent SSH tunnel with all configured port forwards.
+        Tunnel runs silently in the background with -N (no shell).
+
+        Args:
+            connection: SSHConnection with tunnel configuration (connection_type="tunnel")
+
+        Returns:
+            Tuple of (Success Status, Error Message or None)
+        """
+        if not connection.port_forwards:
+            return False, "No port forwards configured for tunnel."
+
+        try:
+            # Get tunnel command with all port forwards
+            tunnel_cmd = connection.get_tunnel_command()
+
+            # Handle password authentication if needed
+            env = os.environ.copy()
+            if connection.password:
+                if sys.platform != "win32":
+                    if shutil.which("sshpass"):
+                        env["SSHPASS"] = connection.password
+                        tunnel_cmd = ["sshpass", "-e"] + tunnel_cmd
+                    else:
+                        return False, "Password authentication requires 'sshpass' to be installed."
+                else:
+                    # Windows doesn't easily support background tunnels with passwords
+                    return (
+                        False,
+                        "Tunnel mode with password authentication is not supported on Windows.",
+                    )
+
+            # Handle PPK conversion if necessary (Linux/macOS)
+            temp_key = None
+            if (
+                connection.key_path
+                and connection.key_path.lower().endswith(".ppk")
+                and sys.platform != "win32"
+            ):
+                puttygen = shutil.which("puttygen")
+                if puttygen:
+                    import tempfile
+
+                    fd, temp_key_path = tempfile.mkstemp(prefix="sshive_tunnel_", suffix=".key")
+                    os.close(fd)
+                    temp_key = Path(temp_key_path)
+
+                    try:
+                        subprocess.run(
+                            [
+                                puttygen,
+                                connection.key_path,
+                                "-O",
+                                "private-openssh",
+                                "-o",
+                                temp_key_path,
+                            ],
+                            check=True,
+                            capture_output=True,
+                        )
+
+                        # Update tunnel_cmd to use converted key
+                        for i, arg in enumerate(tunnel_cmd):
+                            if (
+                                arg == "-i"
+                                and i + 1 < len(tunnel_cmd)
+                                and tunnel_cmd[i + 1] == connection.key_path
+                            ):
+                                tunnel_cmd[i + 1] = temp_key_path
+                                break
+                    except Exception as e:
+                        if temp_key.exists():
+                            temp_key.unlink()
+                        return False, f"Failed to convert PPK key: {e}"
+
+            # Clean environment variables
+            if getattr(sys, "frozen", False):
+                for var in ["LD_LIBRARY_PATH", "PYTHONPATH", "PYTHONHOME", "QT_PLUGIN_PATH"]:
+                    orig_var = f"{var}_ORIG"
+                    if orig_var in env:
+                        env[var] = env[orig_var]
+                    else:
+                        env.pop(var, None)
+
+            # Launch tunnel in background - use Popen instead of subprocess.run
+            # to allow it to stay running independently
+            subprocess.Popen(
+                tunnel_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                env=env,
+            )
+
+            # Clean up temporary key after a delay if needed
+            if temp_key:
+
+                def cleanup():
+                    import time
+
+                    time.sleep(5)
+                    try:
+                        if temp_key.exists():
+                            temp_key.unlink()
+                    except Exception:
+                        pass
+
+                import threading
+
+                threading.Thread(target=cleanup, daemon=True).start()
+
+            return True, None
+
+        except Exception as e:
+            return False, f"Failed to launch tunnel: {e}"
+
+    @staticmethod
     def test_connection(connection: SSHConnection) -> tuple[bool, str | None]:
         """Test if SSH connection is possible (doesn't actually connect).
 

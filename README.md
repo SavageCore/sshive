@@ -23,6 +23,7 @@ Organize your SSH connections into hierarchical groups, connect with a single cl
 - 🎨 **Dynamic Icons:** Search and auto-assign self-hosted service icons (powered by selfh.st).
 - 🌓 **Native Theming:** Automatically adapts to your system's dark or light theme using native Fusion styling.
 - 🔄 **Auto-Updates:** Cross-platform update detection ensures you're always running the latest version.
+- 🌊 **SSH Tunneling:** Create persistent background tunnels with local, remote, and dynamic (SOCKS) port forwarding for secure access to remote services.
 - 💾 **Portable Storage:** Connections are saved in a simple, portable JSON file (`~/.config/sshive/connections.json`).
 
 ![SSHive Dark Mode](previews/dark.png)
@@ -109,6 +110,44 @@ uv run sshive
 4. Organize by typing a **Group** name (e.g., `Work/Production`).
 5. (Optional) Enter a service name (like `proxmox` or `portainer`) for a custom icon automatically fetched from [selfh.st/icons](https://selfh.st/icons/).
 
+### SSH Tunneling
+
+SSHive supports creating persistent SSH tunnels with multiple port forwarding rules. Tunnels run silently in the background without opening a terminal window, making them ideal for secure access to remote databases, APIs, and internal services.
+
+#### Creating a Tunnel Connection
+
+1. Click **"➕ Add Connection"**
+2. Fill in the **Tunnel Connection** details (Host, User, Port, Auth)
+3. Set **Connection Type** to `Tunnel` (instead of `Shell`)
+4. Add port forwards:
+   - **Local Forward** (`-L`): Access a remote service locally
+     - Example: `localhost:5432 → database.internal:5432`
+     - Use case: Access remote database from local tools
+   - **Remote Forward** (`-R`): Share your local service with the remote server
+     - Example: `9000 → localhost:8000`
+     - Use case: Expose local dev server to remote webhooks
+   - **Dynamic Forward** (`-D`): Create a SOCKS proxy for all traffic
+     - Local port becomes a SOCKS proxy
+     - Use case: Secure browsing or accessing multiple services through one tunnel
+
+#### Example Use Cases
+
+**Local Database Access:**
+- Set up a local forward: `localhost:5432 → db.production.internal:5432`
+- Connect your database client (DBeaver, psql, MySQL Workbench) to `localhost:5432`
+- Traffic is automatically encrypted and forwarded through the SSH connection
+
+**Multiple Services (Composite Tunnel):**
+Create a single tunnel connection with multiple forwards:
+- Database: `5432 → db.internal:5432`
+- Redis: `6379 → redis.internal:6379`  
+- Elasticsearch: `9200 → elastic.internal:9200`
+
+**Secure Browsing:**
+- Set up a dynamic forward on port `1080`
+- Configure your browser to use `localhost:1080` as a SOCKS proxy
+- All traffic is routed through the remote server
+
 ### Keyboard Shortcuts
 
 - `Ctrl+I` - Toggle Incognito Mode (obfuscates server list)
@@ -118,17 +157,19 @@ uv run sshive
 
 ## Requirements & Dependencies
 
-SSHive relies on your system's utilities to actually perform the SSH connection.
+SSHive relies on your system's utilities to actually perform the SSH connection and tunneling.
 
 - **Linux & macOS:**
   - Requires `ssh` (OpenSSH client, usually pre-installed).
   - For **Password Auth**, `sshpass` must be installed.
   - For **.ppk Key Auth**, `puttygen` (from the `putty-tools` package) must be installed to convert the keys dynamically.
   - **Supported Terminals:** konsole, gnome-terminal, alacritty, kitty, xterm, tilix, terminator, iTerm2, Terminal.app.
+  - **Tunneling:** Works with the standard `ssh` command; no additional tools required for tunnels (local, remote, or dynamic forwarding).
 - **Windows:**
   - Requires `ssh` (usually pre-installed with Windows 10/11).
   - For **Password Auth** or **.ppk Key Auth**, [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) (`plink.exe`) or [KiTTY](http://www.9bis.net/kitty/) (`klink.exe`) must be installed and added to your system `PATH`.
   - **Supported Terminals:** Windows Terminal (`wt.exe`), PuTTY (`putty.exe`), KiTTY (`kitty.exe`).
+  - **Tunneling:** Note that password-authenticated tunnels on Windows may have limitations; SSH key authentication is recommended.
 
 ## Development
 
