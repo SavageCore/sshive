@@ -1,6 +1,6 @@
 # Maintainer: SavageCore
 pkgname=sshive
-pkgver=0.0.0
+pkgver=0.1.0
 pkgrel=1
 pkgdesc="Your hive of SSH connections - A modern SSH connection manager"
 arch=('any')

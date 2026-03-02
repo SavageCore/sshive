@@ -124,7 +124,7 @@ def main():
     # Set application metadata early for QStandardPaths
     app.setApplicationName("sshive")
     app.setOrganizationName("")  # Prevent nested config folder
-    app.setApplicationVersion("0.0.0")
+    app.setApplicationVersion("0.1.0")
     app.setDesktopFileName("sshive")
 
     # Load saved language preference (requires app metadata to be set first)
