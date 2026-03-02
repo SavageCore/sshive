@@ -9,7 +9,9 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QSpinBox,
     QVBoxLayout,
 )
 
@@ -123,6 +125,21 @@ class SettingsDialog(QDialog):
             recent_history_val == "true" or recent_history_val is True
         )
 
+        # Automatic backups setting
+        backups_label = QLabel(self.tr("Automatic backups to keep:"))
+        self.max_backups_spin = QSpinBox()
+        self.max_backups_spin.setMinimum(1)
+        self.max_backups_spin.setMaximum(50)
+        backups_val = self.settings.value("max_backups", "10")
+        self.max_backups_spin.setValue(int(backups_val))
+        self.max_backups_spin.setToolTip(
+            self.tr("Number of automatic timestamped backups to keep in the config folder.")
+        )
+        backups_layout = QHBoxLayout()
+        backups_layout.addWidget(backups_label)
+        backups_layout.addWidget(self.max_backups_spin)
+        backups_layout.addStretch()
+
         help_text = QLabel(
             self.tr(
                 "Prevents terminal flashing by checking credentials first. "
@@ -138,6 +155,7 @@ class SettingsDialog(QDialog):
         gen_layout.addWidget(self.connection_test_debug_check)
         gen_layout.addWidget(self.close_to_tray_check)
         gen_layout.addWidget(self.recent_history_check)
+        gen_layout.addLayout(backups_layout)
 
         # Theme Preference
         theme_label = QLabel(self.tr("Theme Preference:"))
@@ -218,6 +236,7 @@ class SettingsDialog(QDialog):
             "connection_test_debug": self.connection_test_debug_check.isChecked(),
             "close_to_tray": self.close_to_tray_check.isChecked(),
             "save_recent_history": self.recent_history_check.isChecked(),
+            "max_backups": self.max_backups_spin.value(),
             "theme_preference": theme_map.get(self.theme_combo.currentIndex(), "System"),
             "language": self.lang_combo.currentData(),
             "column_visibility": {idx: check.isChecked() for idx, check in self.col_checks},

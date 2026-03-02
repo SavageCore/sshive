@@ -38,7 +38,9 @@ class TestMainWindow:
     def window(self, qtbot: QtBot, temp_storage, monkeypatch):
         """Create main window with temporary storage."""
         # Monkey patch storage to use temp storage
-        monkeypatch.setattr("sshive.ui.main_window.ConnectionStorage", lambda: temp_storage)
+        monkeypatch.setattr(
+            "sshive.ui.main_window.ConnectionStorage", lambda **kwargs: temp_storage
+        )
 
         win = MainWindow()
         win.storage = temp_storage
@@ -545,6 +547,7 @@ class TestMainWindow:
                     "connection_test_debug": False,
                     "close_to_tray": True,
                     "save_recent_history": False,
+                    "max_backups": 10,
                     "theme_preference": "System",
                     "language": "system",
                     "column_visibility": {1: True, 2: True, 3: True},

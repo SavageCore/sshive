@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -22,15 +23,16 @@ class TestConnectionStorage:
 
         yield temp_path
 
-        # Cleanup
-        if temp_path.exists():
-            temp_path.unlink()
-        temp_path.parent.rmdir()
+        # Cleanup - remove all files and directories
+        import shutil
+
+        if temp_path.parent.exists():
+            shutil.rmtree(temp_path.parent)
 
     @pytest.fixture
     def storage(self, temp_config):
         """Create storage instance with temporary config."""
-        return ConnectionStorage(temp_config)
+        return ConnectionStorage(temp_config, max_backups=3)
 
     def test_init_creates_config_file(self, temp_config):
         """Test that initialization creates config file."""
@@ -256,3 +258,205 @@ class TestConnectionStorage:
         storage.clear_recent_connections()
 
         assert storage.get_recent_connections() == []
+
+    def test_create_auto_backup(self, storage):
+        """Test auto backup creation with log rotation."""
+        conn = SSHConnection(name="Backup Test", host="backup.example.com", user="user")
+        storage.add_connection(conn)
+
+        # Verify backup was created automatically
+        backup_dir = storage.get_backup_dir()
+        backups = sorted(backup_dir.glob("connections-backup-*.json"))
+        assert len(backups) >= 1
+
+        backup_file = backups[-1]
+        assert backup_file.exists()
+        assert "connections-backup-" in backup_file.name
+        assert backup_file.suffix == ".json"
+
+        # Verify backup contains the connection
+        with open(backup_file) as f:
+            data = json.load(f)
+        assert len(data["connections"]) == 1
+        assert data["connections"][0]["name"] == "Backup Test"
+
+    def test_auto_backup_log_rotation(self, storage):
+        """Test that old backups are deleted when exceeding max_backups."""
+        # Storage is configured with max_backups=3 in the fixture
+        conn = SSHConnection(name="Rotation Test", host="rotation.example.com", user="user")
+        storage.add_connection(conn)
+
+        # Create 4 more backups, spacing them out to ensure unique timestamps
+        # (first backup was created by add_connection)
+        for i in range(3):
+            time.sleep(1.1)  # Ensure unique timestamps
+            conn2 = SSHConnection(
+                name=f"Rotation Test {i}",
+                host=f"rotation{i}.example.com",
+                user="user",
+            )
+            storage.add_connection(conn2)
+
+        backup_dir = storage.get_backup_dir()
+        all_backups = sorted(backup_dir.glob("connections-backup-*.json"))
+
+        # Should only keep 3 backups (as configured in fixture)
+        assert len(all_backups) <= 3
+
+    def test_export_connections(self, storage):
+        """Test exporting connections to a file."""
+        conn1 = SSHConnection(name="Export1", host="export1.example.com", user="user1")
+        conn2 = SSHConnection(name="Export2", host="export2.example.com", user="user2")
+        storage.add_connection(conn1)
+        storage.add_connection(conn2)
+
+        export_path = storage.config_file.parent / "export_test.json"
+
+        success = storage.export_connections(export_path)
+
+        assert success
+        assert export_path.exists()
+
+        with open(export_path) as f:
+            data = json.load(f)
+
+        assert len(data["connections"]) == 2
+        assert data["connections"][0]["name"] == "Export1"
+        assert data["connections"][1]["name"] == "Export2"
+
+        # Cleanup
+        export_path.unlink()
+
+    def test_import_connections_replace(self, storage):
+        """Test importing connections with replace mode."""
+        # Create original connections
+        original = SSHConnection(name="Original", host="original.example.com", user="user")
+        storage.add_connection(original)
+        assert len(storage.load_connections()) == 1
+
+        # Create import file with different connections
+        import_data = {
+            "version": "1.0",
+            "connections": [
+                {
+                    "id": "test-id-1",
+                    "name": "Imported1",
+                    "host": "imported1.example.com",
+                    "user": "user1",
+                    "port": 22,
+                    "key": None,
+                    "group": "default",
+                    "tunnels": [],
+                }
+            ],
+        }
+        import_path = storage.config_file.parent / "import_test.json"
+        with open(import_path, "w") as f:
+            json.dump(import_data, f)
+
+        # Import with replace=False
+        success = storage.import_connections(import_path, merge=False)
+
+        assert success
+        loaded = storage.load_connections()
+        assert len(loaded) == 1
+        assert loaded[0].name == "Imported1"
+
+        # Cleanup
+        import_path.unlink()
+
+    def test_import_connections_merge(self, storage):
+        """Test importing connections with merge mode."""
+        # Create original connections
+        original = SSHConnection(name="Original", host="original.example.com", user="user")
+        storage.add_connection(original)
+
+        # Create import file
+        import_data = {
+            "version": "1.0",
+            "connections": [
+                {
+                    "id": "test-id-2",
+                    "name": "Imported2",
+                    "host": "imported2.example.com",
+                    "user": "user2",
+                    "port": 22,
+                    "key": None,
+                    "group": "default",
+                    "tunnels": [],
+                }
+            ],
+        }
+        import_path = storage.config_file.parent / "merge_test.json"
+        with open(import_path, "w") as f:
+            json.dump(import_data, f)
+
+        # Import with merge=True
+        success = storage.import_connections(import_path, merge=True)
+
+        assert success
+        loaded = storage.load_connections()
+        assert len(loaded) == 2
+
+        names = {conn.name for conn in loaded}
+        assert "Original" in names
+        assert "Imported2" in names
+
+        # Cleanup
+        import_path.unlink()
+
+    def test_import_connections_merge_avoids_duplicates(self, storage):
+        """Test that merge mode avoids duplicate IDs."""
+        # Create original connections
+        conn_id = "shared-id-123"
+        original = SSHConnection(
+            id=conn_id, name="Original", host="original.example.com", user="user"
+        )
+        storage.add_connection(original)
+
+        # Create import file with same ID
+        import_data = {
+            "version": "1.0",
+            "connections": [
+                {
+                    "id": conn_id,
+                    "name": "Duplicate",
+                    "host": "duplicate.example.com",
+                    "user": "user",
+                    "port": 22,
+                    "key": None,
+                    "group": "default",
+                    "tunnels": [],
+                }
+            ],
+        }
+        import_path = storage.config_file.parent / "dup_test.json"
+        with open(import_path, "w") as f:
+            json.dump(import_data, f)
+
+        # Import with merge=True
+        success = storage.import_connections(import_path, merge=True)
+
+        assert success
+        loaded = storage.load_connections()
+        # Should still be 1 connection (duplicate skipped)
+        assert len(loaded) == 1
+        assert loaded[0].name == "Original"  # Original kept, not overwritten
+
+        # Cleanup
+        import_path.unlink()
+
+    def test_import_invalid_file(self, storage):
+        """Test importing from invalid file."""
+        invalid_path = storage.config_file.parent / "invalid.json"
+        with open(invalid_path, "w") as f:
+            f.write("not valid json{")
+
+        success = storage.import_connections(invalid_path, merge=False)
+
+        assert not success
+        # Original connections should be unchanged
+        assert len(storage.load_connections()) == 0
+
+        # Cleanup
+        invalid_path.unlink()

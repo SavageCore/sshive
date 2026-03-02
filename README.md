@@ -25,6 +25,7 @@ Organize your SSH connections into hierarchical groups, connect with a single cl
 - 🔄 **Auto-Updates:** Cross-platform update detection ensures you're always running the latest version.
 - 🌊 **SSH Tunneling:** Create persistent background tunnels with local, remote, and dynamic (SOCKS) port forwarding for secure access to remote services.
 - 💾 **Portable Storage:** Connections are saved in a simple, portable JSON file (`~/.config/sshive/connections.json`).
+- 💾 **Backup & Restore:** Create automatic timestamped backups with log rotation, export to portable files, or import from backups with merge/replace modes.
 
 ![SSHive Dark Mode](previews/dark.png)
 ![SSHive Light Mode](previews/light.png)
@@ -147,6 +148,17 @@ Create a single tunnel connection with multiple forwards:
 - Set up a dynamic forward on port `1080`
 - Configure your browser to use `localhost:1080` as a SOCKS proxy
 - All traffic is routed through the remote server
+
+### Backup & Restore
+
+SSHive provides comprehensive backup and restore functionality to protect your SSH connection configurations. Automatic backups are created whenever you make changes, and you can export connections to files or import from backups.
+
+**Key Features:**
+- **Automatic Backups:** Timestamped backups created on every connection change with configurable log rotation (1-50 backups, default: 10)
+- **Export Connections:** Save your connections to a portable JSON file for backup or migration
+- **Import Connections:** Import from backups with merge or replace modes
+
+For detailed instructions on using backup and restore features, see the [Backup and Restore Guide](docs/BACKUP_AND_RESTORE.md).
 
 ### Keyboard Shortcuts
 

@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import QStandardPaths
+import platformdirs
 
 from sshive.models.connection import SSHConnection
 
@@ -12,34 +12,35 @@ from sshive.models.connection import SSHConnection
 class ConnectionStorage:
     """Handles persistence of SSH connections to JSON file.
 
-    Storage location:
-        - Linux/macOS: ~/.config/sshive/connections.json
-        - Windows: %APPDATA%/sshive/connections.json
+    Storage location determined by platformdirs:
+        - Linux: ~/.config/sshive/connections.json
+        - macOS: ~/Library/Application Support/sshive/connections.json
+        - Windows: %APPDATA%\\sshive\\connections.json
     """
 
-    def __init__(self, config_path: Path | None = None):
+    def __init__(self, config_path: Path | None = None, max_backups: int = 10):
         """Initialize storage.
 
         Args:
             config_path: Custom config file path (optional, mainly for testing)
+            max_backups: Maximum number of automatic backups to keep (default 10)
         """
         if config_path:
             self.config_file = config_path
         else:
             self.config_file = self._get_default_config_path()
 
+        self.max_backups = max_backups
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Initialize empty config if doesn't exist
         if not self.config_file.exists():
-            self.save_connections([])
+            self._save_data({"version": "1.0", "connections": [], "recent_connections": []})
 
     @staticmethod
     def _get_default_config_path() -> Path:
         """Get platform-specific config file path."""
-        config_dir = Path(
-            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)
-        )
+        config_dir = Path(platformdirs.user_config_dir("sshive"))
         return config_dir / "connections.json"
 
     def _load_data(self) -> dict:
@@ -107,6 +108,9 @@ class ConnectionStorage:
         data["version"] = "1.0"
         data["connections"] = [conn.to_dict() for conn in connections]
         self._save_data(data)
+
+        # Create automatic backup after saving changes
+        self.create_auto_backup()
 
     def add_connection(self, connection: SSHConnection) -> None:
         """Add a new connection.
@@ -244,3 +248,112 @@ class ConnectionStorage:
 
         data["recent_connections"] = []
         self._save_data(data)
+
+    def get_backup_dir(self) -> Path:
+        """Get backup directory path, creating it if needed."""
+        backup_dir = self.config_file.parent / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        return backup_dir
+
+    def create_auto_backup(self) -> Path | None:
+        """Create automatic timestamped backup in config directory.
+
+        Keeps only the most recent backups (count set by max_backups),
+        deleting older ones automatically.
+
+        Returns:
+            Path to created backup file, or None if backup failed
+        """
+        try:
+            backup_dir = self.get_backup_dir()
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+            backup_file = backup_dir / f"connections-backup-{timestamp}.json"
+
+            # Copy current connections file to backup
+            with open(self.config_file, encoding="utf-8") as src:
+                data = json.load(src)
+
+            with open(backup_file, "w", encoding="utf-8") as dst:
+                json.dump(data, dst, indent=2)
+
+            # Clean up old backups (keep only max_backups most recent)
+            backups = sorted(backup_dir.glob("connections-backup-*.json"))
+            if len(backups) > self.max_backups:
+                for old_backup in backups[: -self.max_backups]:
+                    old_backup.unlink()
+
+            return backup_file
+
+        except (json.JSONDecodeError, OSError, ValueError):
+            return None
+
+    def export_connections(self, export_path: Path) -> bool:
+        """Export connections to a file in user-chosen location.
+
+        Args:
+            export_path: Destination file path for export
+
+        Returns:
+            True if export succeeded, False otherwise
+        """
+        try:
+            data = self._load_data()
+            export_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(export_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+
+            return True
+        except (json.JSONDecodeError, OSError, ValueError):
+            return False
+
+    def import_connections(self, import_path: Path, merge: bool = False) -> bool:
+        """Import connections from a file.
+
+        Args:
+            import_path: Source file path to import from
+            merge: If True, merge with existing connections. If False, replace all.
+
+        Returns:
+            True if import succeeded, False otherwise
+        """
+        try:
+            with open(import_path, encoding="utf-8") as f:
+                import_data = json.load(f)
+
+            if not isinstance(import_data, dict):
+                return False
+
+            import_connections = import_data.get("connections", [])
+            if not isinstance(import_connections, list):
+                return False
+
+            if merge:
+                # Merge: load existing and add new ones (avoiding duplicates by ID)
+                existing = self.load_connections()
+                existing_ids = {conn.id for conn in existing}
+
+                for conn_data in import_connections:
+                    if isinstance(conn_data, dict):
+                        # If it's a duplicate ID, skip it
+                        if conn_data.get("id") not in existing_ids:
+                            try:
+                                new_conn = SSHConnection.from_dict(conn_data)
+                                existing.append(new_conn)
+                            except (KeyError, ValueError):
+                                continue
+
+                self.save_connections(existing)
+            else:
+                # Replace: load imported data and save
+                new_connections = [
+                    SSHConnection.from_dict(conn_data)
+                    for conn_data in import_connections
+                    if isinstance(conn_data, dict)
+                ]
+                self.save_connections(new_connections)
+
+            return True
+
+        except (json.JSONDecodeError, OSError, ValueError):
+            return False

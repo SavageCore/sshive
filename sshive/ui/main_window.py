@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
@@ -49,14 +51,17 @@ class MainWindow(QMainWindow):
         """Initialize main window."""
         super().__init__()
 
-        self.storage = ConnectionStorage()
+        # Load settings first to get backup configuration
+        self.settings = QSettings("sshive", "sshive")
+        max_backups = int(self.settings.value("max_backups", "10"))
+
+        self.storage = ConnectionStorage(max_backups=max_backups)
         self.connections: list[SSHConnection] = []
         self._is_quitting = False
         self.tray_icon: QSystemTrayIcon | None = None
         self.tray_toggle_action: QAction | None = None
 
         # Determine icon color based on theme preference
-        self.settings = QSettings("sshive", "sshive")
         self._apply_theme()
 
         self.incognito_mode = False
@@ -358,6 +363,31 @@ class MainWindow(QMainWindow):
 
         self.clear_recent_action = QAction(self.tr("Clear Recent History"), self)
         self.clear_recent_action.triggered.connect(self._clear_recent_connections_history)
+
+        self.settings_menu.addSeparator()
+
+        # Export/Import submenu
+        backup_menu = self.settings_menu.addMenu(self.tr("Backup and Restore"))
+
+        export_icon = qta.icon("fa5s.file-export", color=self.icon_color)
+        export_action = QAction(export_icon, self.tr("Export Connections"), self)
+        export_action.setToolTip(self.tr("Save connections to a file."))
+        export_action.triggered.connect(self._export_connections)
+        backup_menu.addAction(export_action)
+
+        import_icon = qta.icon("fa5s.file-import", color=self.icon_color)
+        import_action = QAction(import_icon, self.tr("Import Connections"), self)
+        import_action.setToolTip(self.tr("Load connections from a file."))
+        import_action.triggered.connect(self._import_connections)
+        backup_menu.addAction(import_action)
+
+        backup_menu.addSeparator()
+
+        open_folder_icon = qta.icon("fa5s.folder-open", color=self.icon_color)
+        open_folder_action = QAction(open_folder_icon, self.tr("Open Config Folder"), self)
+        open_folder_action.setToolTip(self.tr("Open config folder in file manager."))
+        open_folder_action.triggered.connect(self._open_config_folder)
+        backup_menu.addAction(open_folder_action)
 
         self.settings_menu.addSeparator()
 
@@ -1299,6 +1329,10 @@ class MainWindow(QMainWindow):
                 "save_recent_history", str(settings["save_recent_history"]).lower()
             )
 
+            # Update automatic backups setting
+            self.settings.setValue("max_backups", int(settings["max_backups"]))
+            self.storage.max_backups = settings["max_backups"]
+
             if previous_save_recent_history and not settings["save_recent_history"]:
                 has_recent_history = bool(self.storage.get_recent_connections(limit=1))
                 if has_recent_history:
@@ -1375,16 +1409,100 @@ class MainWindow(QMainWindow):
             lambda: self._show_update_dialog(version, url, notes)
         )
 
-        # Show update button
-        self.update_btn.setText(self.tr("Update Available! ({})").format(version))
-        self.update_btn.setVisible(True)
+    def _export_connections(self) -> None:
+        """Export connections to user-chosen location."""
+        downloads_dir = Path.home() / "Downloads"
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Export Connections"),
+            str(downloads_dir / "connections-backup.json"),
+            self.tr("JSON Files (*.json);;All Files (*)"),
+        )
 
-        # Reconnect clicked to show dialog
+        if not path:
+            return
+
+        if self.storage.export_connections(Path(path)):
+            QMessageBox.information(
+                self,
+                self.tr("Export Successful"),
+                self.tr("Connections exported to:") + f"\n{path}",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                self.tr("Export Failed"),
+                self.tr("Failed to export connections. Please check permissions."),
+            )
+
+    def _import_connections(self) -> None:
+        """Import connections from a file."""
+        downloads_dir = Path.home() / "Downloads"
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Import Connections"),
+            str(downloads_dir),
+            self.tr("JSON Files (*.json);;All Files (*)"),
+        )
+
+        if not path:
+            return
+
+        # Ask user if they want to merge or replace
+        reply = QMessageBox.question(
+            self,
+            self.tr("Import Mode"),
+            self.tr(
+                "Do you want to merge with existing connections?\n\nYes = Merge\nNo = Replace all"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+
+        merge = reply == QMessageBox.StandardButton.Yes
+
+        if self.storage.import_connections(Path(path), merge=merge):
+            self.load_connections()
+            if merge:
+                msg = self.tr(
+                    "Connections imported (merged).\nChanges will be saved automatically."
+                )
+            else:
+                msg = self.tr(
+                    "Connections imported (replaced).\nChanges will be saved automatically."
+                )
+            QMessageBox.information(self, self.tr("Import Successful"), msg)
+        else:
+            QMessageBox.warning(
+                self,
+                self.tr("Import Failed"),
+                self.tr(
+                    "Failed to import connections. Please ensure the file is a valid SSHive backup."
+                ),
+            )
+
+    def _open_config_folder(self) -> None:
+        """Open config folder in the system file manager."""
+        config_dir = self.storage.config_file.parent
+        config_dir.mkdir(parents=True, exist_ok=True)
+
         try:
-            self.update_btn.clicked.disconnect()
-        except (RuntimeError, TypeError):
-            pass
-        self.update_btn.clicked.connect(lambda: self._show_update_dialog(version, url, notes))
+            if os.name == "nt":  # Windows
+                os.startfile(config_dir)  # type: ignore
+            elif os.name == "posix":  # Linux/macOS
+                # Try xdg-open first (Linux), then open (macOS)
+                try:
+                    subprocess.Popen(["xdg-open", str(config_dir)])
+                except FileNotFoundError:
+                    subprocess.Popen(["open", str(config_dir)])
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"Error opening folder: {e}")
+            QMessageBox.warning(
+                self,
+                self.tr("Could Not Open Folder"),
+                self.tr("Failed to open config folder.") + f"\nPath: {config_dir}",
+            )
 
     def eventFilter(self, obj, event):
         """Swap update button icon on hover for visibility against blue background."""
