@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -249,6 +250,168 @@ class SSHLauncher:
                     )
 
         return True, None
+
+    @staticmethod
+    def test_full_connection(connection: SSHConnection) -> tuple[bool, str]:
+        """Run comprehensive connection test: preflight + reachability + auth check.
+
+        Args:
+            connection: SSHConnection to test
+
+        Returns:
+            Tuple of (success, detailed status message)
+        """
+        # Stage 1: Preflight checks
+        preflight_ok, preflight_err = SSHLauncher.test_connection(connection)
+        if not preflight_ok:
+            return False, f"Preflight check failed:\n{preflight_err}"
+
+        # Stage 2: Network/port reachability
+        reach_ok, reach_msg = SSHLauncher.test_connectivity(connection)
+        if not reach_ok:
+            return False, f"Network connectivity failed:\n{reach_msg}"
+
+        # Stage 3: Credential validation (if credentials provided)
+        if connection.password or connection.key_path:
+            auth_ok, auth_err = SSHLauncher.check_credentials(connection)
+            if not auth_ok:
+                return False, f"Authentication check failed:\n{auth_err}"
+            return (
+                True,
+                f"Full connection test passed.\n\n{reach_msg}\n\nAuthentication successful.",
+            )
+
+        return True, f"Full connection test passed.\n\n{reach_msg}"
+
+    @staticmethod
+    def test_connectivity(
+        connection: SSHConnection, timeout_seconds: float = 1.5
+    ) -> tuple[bool, str]:
+        """Check host reachability via ping and SSH port connectivity.
+
+        Args:
+            connection: SSHConnection to test
+            timeout_seconds: Timeout for ping and port checks
+
+        Returns:
+            Tuple of (success, status message)
+        """
+        host = connection.host.strip()
+        if not host:
+            return False, "Host is empty."
+
+        ping_available = shutil.which("ping") is not None
+        ping_ok: bool | None = None
+        ping_message = "Ping skipped (ping command not found)."
+
+        if ping_available:
+            try:
+                if sys.platform == "win32":
+                    ping_cmd = ["ping", "-n", "1", "-w", str(int(timeout_seconds * 1000)), host]
+                else:
+                    ping_cmd = ["ping", "-c", "1", "-W", str(max(1, int(timeout_seconds))), host]
+
+                ping_result = subprocess.run(
+                    ping_cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=max(1, timeout_seconds + 0.5),
+                )
+                ping_ok = ping_result.returncode == 0
+                if ping_ok:
+                    ping_message = "Ping successful."
+                else:
+                    ping_message = "Host did not respond to ping."
+            except Exception:
+                ping_ok = False
+                ping_message = "Ping failed to execute."
+
+        try:
+            with socket.create_connection((host, connection.port), timeout=timeout_seconds):
+                pass
+
+            if ping_ok is False:
+                return True, (
+                    f"SSH port {connection.port} is reachable, but ping failed. "
+                    "(This may be expected if ICMP is blocked.)"
+                )
+
+            if ping_ok is True:
+                return True, f"Ping successful and SSH port {connection.port} is reachable."
+
+            return True, f"SSH port {connection.port} is reachable. {ping_message}"
+        except OSError as exc:
+            if ping_ok is True:
+                return (
+                    False,
+                    f"Ping successful but SSH port {connection.port} is not reachable: {exc}",
+                )
+
+            if ping_ok is False:
+                return (
+                    False,
+                    f"Host did not respond to ping and SSH port {connection.port} is not reachable: {exc}",
+                )
+
+            return False, f"SSH port {connection.port} is not reachable: {exc}. {ping_message}"
+
+    @staticmethod
+    def collect_ssh_debug_log(connection: SSHConnection, timeout_seconds: float = 4.0) -> str:
+        """Collect debug output from an ssh -vvv attempt.
+
+        Args:
+            connection: SSHConnection to test
+            timeout_seconds: Max execution time for the debug attempt
+
+        Returns:
+            Full debug log text (command, return code, and output)
+        """
+        ssh_bin = shutil.which("ssh")
+        if not ssh_bin:
+            return "ssh command not found in PATH."
+
+        cmd = [
+            ssh_bin,
+            "-vvv",
+            "-p",
+            str(connection.port),
+            "-o",
+            f"ConnectTimeout={max(1, int(timeout_seconds))}",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "BatchMode=yes",
+        ]
+
+        if connection.key_path:
+            key_path = str(Path(connection.key_path).expanduser())
+            cmd.extend(["-i", key_path])
+
+        cmd.append(f"{connection.user}@{connection.host}")
+        cmd.append("exit")
+
+        header = [
+            f"Connection: {connection.name} ({connection.user}@{connection.host}:{connection.port})",
+            f"Command: {' '.join(cmd)}",
+            "",
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds)
+            body = [f"Return code: {result.returncode}", "", result.stderr or result.stdout or ""]
+            return "\n".join(header + body)
+        except subprocess.TimeoutExpired as exc:
+            stderr = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
+            stdout = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+            body = [
+                f"Timed out after {timeout_seconds:.1f}s",
+                "",
+                stderr or stdout or "No output captured before timeout.",
+            ]
+            return "\n".join(header + body)
+        except Exception as exc:
+            body = ["Failed to collect debug log.", "", str(exc)]
+            return "\n".join(header + body)
 
     @staticmethod
     def check_credentials(connection: SSHConnection) -> tuple[bool, str | None]:

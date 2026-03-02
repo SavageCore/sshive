@@ -35,6 +35,7 @@ from sshive.ui.icon_manager import IconManager
 from sshive.ui.settings_dialog import SettingsDialog
 from sshive.ui.theme import ThemeManager
 from sshive.ui.update_dialog import UpdateDialog
+from sshive.ui.utils import show_connection_test_debug_dialog
 from sshive.updater import UpdateChecker
 
 
@@ -302,6 +303,14 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.delete_btn)
 
         button_layout.addStretch()
+
+        test_icon = qta.icon("fa5s.stethoscope", color=self.icon_color)
+        self.test_btn = QPushButton(self.tr("Test"))
+        self.test_btn.setIcon(test_icon)
+        self.test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.test_btn.clicked.connect(lambda: self._test_connection(None))
+        self.test_btn.setEnabled(False)
+        button_layout.addWidget(self.test_btn)
 
         connect_icon = qta.icon("fa5s.rocket", color=self.icon_color)
         self.connect_btn = QPushButton(self.tr("Connect"))
@@ -655,6 +664,7 @@ class MainWindow(QMainWindow):
             self.clone_btn.setEnabled(False)
             self.edit_btn.setEnabled(False)
             self.delete_btn.setEnabled(False)
+            self.test_btn.setEnabled(False)
             self.connect_btn.setEnabled(False)
             return
 
@@ -666,7 +676,44 @@ class MainWindow(QMainWindow):
         self.clone_btn.setEnabled(is_connection)
         self.edit_btn.setEnabled(is_connection)
         self.delete_btn.setEnabled(is_connection)
+        self.test_btn.setEnabled(is_connection)
         self.connect_btn.setEnabled(is_connection)
+
+    def _test_connection(self, item: QTreeWidgetItem | None = None):
+        """Run full connection test (preflight + network + auth) for selected connection."""
+        if not item:
+            selected_items = self.tree.selectedItems()
+            if not selected_items:
+                return
+            item = selected_items[0]
+
+        connection = item.data(0, Qt.ItemDataRole.UserRole)
+        if not connection:
+            return
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            QApplication.processEvents()
+            success, message = SSHLauncher.test_full_connection(connection)
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if success:
+            title = self.tr("Connection Test")
+        else:
+            title = self.tr("Connection Test Failed")
+
+        if self.settings.value("connection_test_debug", "false") in ["true", True]:
+            debug_log = SSHLauncher.collect_ssh_debug_log(connection)
+            show_connection_test_debug_dialog(self, title, connection, message, debug_log)
+            return
+
+        if success:
+            QMessageBox.information(
+                self, title, self.tr("{}\n\n{}").format(connection.name, message)
+            )
+        else:
+            QMessageBox.warning(self, title, self.tr("{}\n\n{}").format(connection.name, message))
 
     def _add_connection(self):
         """Show add connection dialog."""
@@ -871,6 +918,11 @@ class MainWindow(QMainWindow):
         )
         connect_action.triggered.connect(lambda: self._connect_to_server(item))
 
+        test_action = menu.addAction(
+            qta.icon("fa5s.stethoscope", color=self.icon_color), self.tr("Test Connection")
+        )
+        test_action.triggered.connect(lambda: self._test_connection(item))
+
         menu.addSeparator()
 
         clone_action = menu.addAction(
@@ -931,6 +983,11 @@ class MainWindow(QMainWindow):
             # Update updater setting
             self.settings.setValue(
                 "check_updates_startup", str(settings["check_updates_startup"]).lower()
+            )
+
+            # Update connection test debug setting
+            self.settings.setValue(
+                "connection_test_debug", str(settings["connection_test_debug"]).lower()
             )
 
             # Update column visibility

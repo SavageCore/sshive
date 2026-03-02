@@ -7,6 +7,7 @@ from nanoid import generate
 from PySide6.QtCore import QStandardPaths, Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QToolButton,
@@ -22,8 +24,10 @@ from PySide6.QtWidgets import (
 )
 
 from sshive.models.connection import SSHConnection
+from sshive.ssh.launcher import SSHLauncher
 from sshive.ui.icon_manager import IconManager
 from sshive.ui.theme import ThemeManager
+from sshive.ui.utils import show_connection_test_debug_dialog
 
 
 class IconDropLabel(QLabel):
@@ -243,6 +247,10 @@ class AddConnectionDialog(QDialog):
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        self.test_btn = button_box.addButton(
+            self.tr("Test"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.test_btn.clicked.connect(self._test_connection)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -518,6 +526,64 @@ class AddConnectionDialog(QDialog):
         else:
             self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
             self.toggle_password_btn.setIcon(qta.icon("fa5s.eye", color=icon_color))
+
+    def _build_connection_for_test(self) -> SSHConnection | None:
+        """Build a temporary connection object from current form values."""
+        name = self.name_input.text().strip()
+        host = self.host_input.text().strip()
+        user = self.user_input.text().strip()
+
+        if not name or not host or not user:
+            return None
+
+        key_path = self.key_input.text().strip() or None
+        password = self.password_input.text() or None
+        group = self.group_input.currentText().strip() or self.tr("Default")
+        icon = self.icon_input.text().strip() or None
+
+        try:
+            return SSHConnection(
+                name=name,
+                host=host,
+                user=user,
+                port=self.port_input.value(),
+                key_path=key_path,
+                password=password,
+                group=group,
+                icon=icon,
+            )
+        except ValueError:
+            return None
+
+    def _test_connection(self):
+        """Run full connection test (preflight + network + auth) for dialog form values."""
+        connection = self._build_connection_for_test()
+        if connection is None:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Test"),
+                self.tr("Please fill in Name, Host, and User before testing."),
+            )
+            return
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            QApplication.processEvents()
+            success, message = SSHLauncher.test_full_connection(connection)
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if success:
+            QMessageBox.information(
+                self,
+                self.tr("Connection Test"),
+                self.tr("{}\n\n{}").format(connection.name, message),
+            )
+        else:
+            # On failure, collect and show debug log
+            debug_log = SSHLauncher.collect_ssh_debug_log(connection)
+            title = self.tr("Connection Test Failed")
+            show_connection_test_debug_dialog(self, title, connection, message, debug_log)
 
     def get_connection(self) -> SSHConnection | None:
         """Get connection from form data.

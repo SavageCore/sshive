@@ -96,6 +96,15 @@ class SettingsDialog(QDialog):
         update_val = self.settings.value("check_updates_startup", "true")
         self.update_check.setChecked(update_val == "true" or update_val is True)
 
+        self.connection_test_debug_check = QCheckBox(
+            self.tr("Show SSH debug log after connection test")
+        )
+        self.connection_test_debug_check.setToolTip(
+            self.tr("Shows a detailed ssh -vvv log with copy/save options after testing.")
+        )
+        debug_val = self.settings.value("connection_test_debug", "false")
+        self.connection_test_debug_check.setChecked(debug_val == "true" or debug_val is True)
+
         help_text = QLabel(
             self.tr(
                 "Prevents terminal flashing by checking credentials first. "
@@ -108,6 +117,7 @@ class SettingsDialog(QDialog):
         gen_layout.addWidget(self.verify_check)
         gen_layout.addWidget(help_text)
         gen_layout.addWidget(self.update_check)
+        gen_layout.addWidget(self.connection_test_debug_check)
 
         # Theme Preference
         theme_label = QLabel(self.tr("Theme Preference:"))
@@ -185,6 +195,7 @@ class SettingsDialog(QDialog):
         return {
             "verify_credentials": self.verify_check.isChecked(),
             "check_updates_startup": self.update_check.isChecked(),
+            "connection_test_debug": self.connection_test_debug_check.isChecked(),
             "theme_preference": theme_map.get(self.theme_combo.currentIndex(), "System"),
             "language": self.lang_combo.currentData(),
             "column_visibility": {idx: check.isChecked() for idx, check in self.col_checks},

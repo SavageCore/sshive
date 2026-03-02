@@ -171,6 +171,63 @@ class TestSSHLauncher:
         finally:
             Path(key_path).unlink()
 
+    @patch("sshive.ssh.launcher.socket.create_connection")
+    @patch("subprocess.run")
+    @patch("shutil.which")
+    def test_test_connectivity_success_with_ping(
+        self, mock_which, mock_run, mock_create_connection
+    ):
+        """Connectivity check succeeds when ping and port connectivity both work."""
+        mock_which.return_value = "/usr/bin/ping"
+        mock_run.return_value = MagicMock(returncode=0)
+
+        mock_socket = MagicMock()
+        mock_socket.__enter__.return_value = mock_socket
+        mock_socket.__exit__.return_value = False
+        mock_create_connection.return_value = mock_socket
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser", port=22)
+        success, message = SSHLauncher.test_connectivity(conn)
+
+        assert success is True
+        assert "reachable" in message.lower()
+
+    @patch("sshive.ssh.launcher.socket.create_connection")
+    @patch("subprocess.run")
+    @patch("shutil.which")
+    def test_test_connectivity_port_open_ping_blocked(
+        self, mock_which, mock_run, mock_create_connection
+    ):
+        """Connectivity check still succeeds when ping fails but SSH port is reachable."""
+        mock_which.return_value = "/usr/bin/ping"
+        mock_run.return_value = MagicMock(returncode=1)
+
+        mock_socket = MagicMock()
+        mock_socket.__enter__.return_value = mock_socket
+        mock_socket.__exit__.return_value = False
+        mock_create_connection.return_value = mock_socket
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser", port=22)
+        success, message = SSHLauncher.test_connectivity(conn)
+
+        assert success is True
+        assert "ping failed" in message.lower() or "icmp" in message.lower()
+
+    @patch("sshive.ssh.launcher.socket.create_connection")
+    @patch("subprocess.run")
+    @patch("shutil.which")
+    def test_test_connectivity_port_unreachable(self, mock_which, mock_run, mock_create_connection):
+        """Connectivity check fails when SSH port is unreachable."""
+        mock_which.return_value = "/usr/bin/ping"
+        mock_run.return_value = MagicMock(returncode=0)
+        mock_create_connection.side_effect = OSError("Connection refused")
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser", port=22)
+        success, message = SSHLauncher.test_connectivity(conn)
+
+        assert success is False
+        assert "not reachable" in message.lower()
+
     @patch("subprocess.Popen")
     @patch("shutil.which")
     @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
@@ -358,3 +415,85 @@ class TestSSHLauncher:
 
         assert success is False
         assert "Permission denied" in error
+
+    @patch("subprocess.run")
+    @patch("shutil.which")
+    def test_collect_ssh_debug_log(self, mock_which, mock_run):
+        """Debug log collection includes return code and output."""
+        mock_which.return_value = "/usr/bin/ssh"
+        mock_run.return_value = MagicMock(returncode=255, stderr="debug line", stdout="")
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser", port=22)
+        output = SSHLauncher.collect_ssh_debug_log(conn)
+
+        assert "Return code" in output
+        assert "debug line" in output
+
+    @patch("sshive.ssh.launcher.SSHLauncher.check_credentials")
+    @patch("sshive.ssh.launcher.SSHLauncher.test_connectivity")
+    @patch("sshive.ssh.launcher.SSHLauncher.test_connection")
+    def test_test_full_connection_success(self, mock_test_conn, mock_test_reach, mock_check_auth):
+        """Full test chains preflight, reachability, and auth checks."""
+        mock_test_conn.return_value = (True, None)
+        mock_test_reach.return_value = (True, "SSH port is reachable")
+        mock_check_auth.return_value = (True, None)
+
+        conn = SSHConnection(
+            name="Test", host="example.com", user="testuser", key_path="~/.ssh/id_rsa"
+        )
+        success, message = SSHLauncher.test_full_connection(conn)
+
+        assert success is True
+        assert "Full connection test passed" in message
+        mock_test_conn.assert_called_once_with(conn)
+        mock_test_reach.assert_called_once_with(conn)
+        mock_check_auth.assert_called_once_with(conn)
+
+    @patch("sshive.ssh.launcher.SSHLauncher.test_connection")
+    def test_test_full_connection_preflight_failure(self, mock_test_conn):
+        """Full test stops at preflight if check fails."""
+        mock_test_conn.return_value = (False, "SSH not found")
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser")
+        success, message = SSHLauncher.test_full_connection(conn)
+
+        assert success is False
+        assert "Preflight check failed" in message
+        assert "SSH not found" in message
+
+    @patch("sshive.ssh.launcher.SSHLauncher.test_connectivity")
+    @patch("sshive.ssh.launcher.SSHLauncher.test_connection")
+    def test_test_full_connection_reachability_failure(self, mock_test_conn, mock_test_reach):
+        """Full test stops at reachability if check fails."""
+        mock_test_conn.return_value = (True, None)
+        mock_test_reach.return_value = (False, "Target not reachable")
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser")
+        success, message = SSHLauncher.test_full_connection(conn)
+
+        assert success is False
+        assert "Network connectivity failed" in message
+        assert "Target not reachable" in message
+
+    @patch("sshive.ssh.launcher.SSHLauncher.check_credentials")
+    @patch("sshive.ssh.launcher.SSHLauncher.test_connectivity")
+    @patch("sshive.ssh.launcher.SSHLauncher.test_connection")
+    def test_test_full_connection_auth_failure(
+        self, mock_test_conn, mock_test_reach, mock_check_auth
+    ):
+        """Full test stops at auth if credentials fail."""
+        mock_test_conn.return_value = (True, None)
+        mock_test_reach.return_value = (True, "SSH port is reachable")
+        mock_check_auth.return_value = (
+            False,
+            "Permission denied (publickey)",
+        )
+
+        conn = SSHConnection(
+            name="Test", host="example.com", user="testuser", key_path="~/.ssh/id_rsa"
+        )
+        success, message = SSHLauncher.test_full_connection(conn)
+
+        assert success is False
+        assert "Authentication check failed" in message
+        assert "Permission denied" in message

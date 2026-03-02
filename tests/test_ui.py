@@ -51,12 +51,14 @@ class TestMainWindow:
         assert window.add_btn is not None
         assert window.edit_btn is not None
         assert window.delete_btn is not None
+        assert window.test_btn is not None
         assert window.connect_btn is not None
 
     def test_buttons_disabled_on_start(self, window):
         """Test that edit/delete/connect buttons are disabled initially."""
         assert window.edit_btn.isEnabled() is False
         assert window.delete_btn.isEnabled() is False
+        assert window.test_btn.isEnabled() is False
         assert window.connect_btn.isEnabled() is False
 
     def test_load_connections_empty(self, window):
@@ -243,6 +245,7 @@ class TestMainWindow:
         # Buttons should be enabled
         assert window.edit_btn.isEnabled() is True
         assert window.delete_btn.isEnabled() is True
+        assert window.test_btn.isEnabled() is True
         assert window.connect_btn.isEnabled() is True
 
     def test_selecting_group_disables_buttons(self, window, temp_storage, qtbot: QtBot):
@@ -259,6 +262,7 @@ class TestMainWindow:
         # Buttons should be disabled
         assert window.edit_btn.isEnabled() is False
         assert window.delete_btn.isEnabled() is False
+        assert window.test_btn.isEnabled() is False
         assert window.connect_btn.isEnabled() is False
 
     def test_cloning_generates_unique_id(self, window, temp_storage, qtbot: QtBot, monkeypatch):
@@ -411,6 +415,7 @@ class TestAddConnectionDialog:
         assert dialog.port_input is not None
         assert dialog.key_input is not None
         assert dialog.group_input is not None
+        assert dialog.test_btn is not None
 
     def test_default_port_is_22(self, dialog):
         """Test that default port is 22."""
@@ -551,6 +556,78 @@ class TestAddConnectionDialog:
         assert stored_pixmap.width() <= 64
         assert stored_pixmap.height() <= 64
 
+    def test_test_button_runs_connectivity_check(self, dialog, monkeypatch):
+        """Test button runs full connection test and shows success dialog."""
+        dialog.name_input.setText("Test Server")
+        dialog.host_input.setText("example.com")
+        dialog.user_input.setText("testuser")
+
+        called = {"full_test": False, "info": False}
+
+        def fake_full_test(connection):
+            called["full_test"] = True
+            assert connection.host == "example.com"
+            return True, "Full connection test passed.\n\nSSH port is reachable."
+
+        def fake_information(parent, title, text):
+            called["info"] = True
+            assert "Test Server" in text
+            assert "Full connection test passed" in text
+            return QMessageBox.StandardButton.Ok
+
+        monkeypatch.setattr("sshive.ui.add_dialog.SSHLauncher.test_full_connection", fake_full_test)
+        monkeypatch.setattr("sshive.ui.add_dialog.QMessageBox.information", fake_information)
+
+        dialog.test_btn.click()
+
+        assert called["full_test"] is True
+        assert called["info"] is True
+
+    def test_test_button_requires_name_host_user(self, dialog, monkeypatch):
+        """Test button warns when required fields are missing."""
+        called = {"warn": False}
+
+        def fake_warning(parent, title, text):
+            called["warn"] = True
+            assert "Please fill in" in text
+            return QMessageBox.StandardButton.Ok
+
+        monkeypatch.setattr("sshive.ui.add_dialog.QMessageBox.warning", fake_warning)
+
+        dialog.test_btn.click()
+
+        assert called["warn"] is True
+
+    def test_test_button_shows_debug_log_on_failure(self, dialog, monkeypatch):
+        """Test button shows debug log dialog when connection test fails."""
+        dialog.name_input.setText("Fedora Box")
+        dialog.host_input.setText("fedora.local")
+        dialog.user_input.setText("user")
+
+        called = {"full_test": False, "debug_dialog": False}
+
+        def fake_full_test(connection):
+            called["full_test"] = True
+            return False, "Authentication failed: Permission denied"
+
+        def fake_debug_dialog(parent, title, conn, summary, log):
+            called["debug_dialog"] = True
+
+        monkeypatch.setattr("sshive.ui.add_dialog.SSHLauncher.test_full_connection", fake_full_test)
+        monkeypatch.setattr(
+            "sshive.ui.add_dialog.SSHLauncher.collect_ssh_debug_log",
+            lambda c: "ssh -vvv output here",
+        )
+        monkeypatch.setattr(
+            "sshive.ui.add_dialog.show_connection_test_debug_dialog",
+            fake_debug_dialog,
+        )
+
+        dialog.test_btn.click()
+
+        assert called["full_test"] is True
+        assert called["debug_dialog"] is True
+
     def test_existing_groups_populated(self, qtbot: QtBot):
         """Test that existing groups are populated in dropdown."""
         existing_groups = ["Work", "Personal", "Development"]
@@ -637,6 +714,12 @@ class TestSettingsDialog:
         result = dialog.get_settings()
         assert "language" in result
         assert result["language"] == "system"
+
+    def test_get_settings_includes_connection_test_debug(self, dialog):
+        """get_settings() includes the debug toggle for connection testing."""
+        result = dialog.get_settings()
+        assert "connection_test_debug" in result
+        assert result["connection_test_debug"] is False
 
     def test_restart_label_hidden_by_default(self, dialog):
         """Restart warning label is hidden when dialog opens."""
