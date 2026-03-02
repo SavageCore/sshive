@@ -7,6 +7,7 @@ from pathlib import Path
 import platformdirs
 
 from sshive.models.connection import SSHConnection
+from sshive.models.putty_importer import PuTTYImporter
 
 
 class ConnectionStorage:
@@ -357,3 +358,43 @@ class ConnectionStorage:
 
         except (json.JSONDecodeError, OSError, ValueError):
             return False
+
+    def import_putty_connections(
+        self, import_paths: Path | list[Path], merge: bool = False
+    ) -> tuple[bool, int]:
+        """Import connections from PuTTY/KiTTY configuration file(s).
+
+        Args:
+            import_paths: Path (or list of Paths) to PuTTY or KiTTY configuration file(s)
+            merge: If True, merge with existing connections. If False, replace all.
+
+        Returns:
+            Tuple of (success: bool, count: int) where count is number of imported connections
+        """
+        try:
+            # Handle both single path and list of paths
+            if isinstance(import_paths, Path):
+                paths = [import_paths]
+            else:
+                paths = import_paths
+
+            all_connections = []
+            for path in paths:
+                connections = PuTTYImporter.import_from_file(path)
+                all_connections.extend(connections)
+
+            if not all_connections:
+                return False, 0
+
+            if merge:
+                existing = self.load_connections()
+                existing.extend(all_connections)
+                self.save_connections(existing)
+            else:
+                self.save_connections(all_connections)
+
+            return True, len(all_connections)
+
+        except (OSError, ValueError) as e:
+            print(f"Error importing from PuTTY/KiTTY: {e}")
+            return False, 0

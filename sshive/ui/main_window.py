@@ -381,6 +381,12 @@ class MainWindow(QMainWindow):
         import_action.triggered.connect(self._import_connections)
         backup_menu.addAction(import_action)
 
+        putty_icon = qta.icon("fa5s.download", color=self.icon_color)
+        putty_action = QAction(putty_icon, self.tr("Import from PuTTY/KiTTY"), self)
+        putty_action.setToolTip(self.tr("Import sessions from PuTTY or KiTTY configuration files."))
+        putty_action.triggered.connect(self._import_putty_sessions)
+        backup_menu.addAction(putty_action)
+
         backup_menu.addSeparator()
 
         open_folder_icon = qta.icon("fa5s.folder-open", color=self.icon_color)
@@ -1480,6 +1486,143 @@ class MainWindow(QMainWindow):
                 self.tr(
                     "Failed to import connections. Please ensure the file is a valid SSHive backup."
                 ),
+            )
+
+    def _import_putty_sessions(self) -> None:
+        """Import sessions from PuTTY or KiTTY configuration files or directory."""
+        home_dir = Path.home()
+        putty_dir = home_dir / ".putty"
+
+        # Ask how user wants to select source
+        msg = QMessageBox(self)
+        msg.setWindowTitle(self.tr("Select Import Source"))
+        msg.setText(self.tr("How would you like to import PuTTY sessions?"))
+        msg.setStandardButtons(QMessageBox.StandardButton.NoButton)
+
+        select_files = msg.addButton(self.tr("Select Files"), QMessageBox.ButtonRole.ActionRole)
+        browse_folder = msg.addButton(self.tr("Browse Folder"), QMessageBox.ButtonRole.ActionRole)
+        cancel_btn = msg.addButton(QMessageBox.StandardButton.Cancel)
+        select_files.setIcon(qta.icon("fa5s.file", color=self.icon_color))
+        browse_folder.setIcon(qta.icon("fa5s.folder-open", color=self.icon_color))
+        msg.setDefaultButton(cancel_btn)
+
+        msg.exec()
+        clicked = msg.clickedButton()
+
+        paths = []
+        if clicked == select_files:
+            # File selection for .reg, .ini files
+            config_dir = putty_dir
+            if not config_dir.exists():
+                config_dir = home_dir / ".config" / "KiTTY"
+            if not config_dir.exists():
+                config_dir = home_dir / ".config"
+            if not config_dir.exists():
+                config_dir = home_dir
+
+            file_paths, _ = QFileDialog.getOpenFileNames(
+                self,
+                self.tr("Select PuTTY/KiTTY Configuration Files"),
+                str(config_dir),
+                self.tr(
+                    "All Files (*);;Registry Exports (*.reg);;INI Files (*.ini);;Config Files (*.conf)"
+                ),
+            )
+            paths = file_paths
+        elif clicked == browse_folder:
+            # Directory selection for sessions directory
+            dir_path = QFileDialog.getExistingDirectory(
+                self,
+                self.tr("Select PuTTY Sessions Directory"),
+                str(putty_dir if putty_dir.exists() else home_dir),
+                QFileDialog.Option.ShowDirsOnly,
+            )
+            if dir_path:
+                paths = [dir_path]
+        else:
+            # Cancel was clicked or X was pressed
+            return
+
+        if not paths:
+            return
+
+        # Ask user how to handle existing connections
+        msg = QMessageBox(self)
+        msg.setWindowTitle(self.tr("Import Mode"))
+        msg.setText(self.tr("How should these sessions be added?"))
+        msg.setStandardButtons(QMessageBox.StandardButton.NoButton)
+
+        add_new = msg.addButton(self.tr("Add to Existing"), QMessageBox.ButtonRole.ActionRole)
+        replace_all = msg.addButton(self.tr("Replace All"), QMessageBox.ButtonRole.DestructiveRole)
+        cancel_btn = msg.addButton(QMessageBox.StandardButton.Cancel)
+        add_new.setIcon(qta.icon("fa5s.plus", color=self.icon_color))
+        replace_all.setIcon(qta.icon("fa5s.exclamation-triangle", color="#f0ad4e"))
+        msg.setDefaultButton(cancel_btn)
+
+        msg.exec()
+        clicked = msg.clickedButton()
+
+        if clicked == add_new:
+            merge = True
+        elif clicked == replace_all:
+            confirm = QMessageBox.warning(
+                self,
+                self.tr("Confirm Replace All"),
+                self.tr(
+                    "This will remove ALL existing saved connections.\n\n"
+                    "After this action, only the imported PuTTY/KiTTY entries will remain.\n\n"
+                    "Do you want to continue?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
+            merge = False
+        else:
+            # Cancel was clicked or X was pressed - ALWAYS cancel, never default to replace
+            return
+
+        success, count = self.storage.import_putty_connections(
+            [Path(p) for p in paths], merge=merge
+        )
+
+        if success and count > 0:
+            self._load_connections()
+            if merge:
+                msg = self.tr(
+                    "Successfully imported {} sessions from PuTTY/KiTTY.\n"
+                    "All sessions have been added to the 'Imported from PuTTY' group.\n"
+                    "Changes will be saved automatically."
+                ).format(count)
+            else:
+                msg = self.tr(
+                    "Successfully imported {} sessions from PuTTY/KiTTY (replaced all existing).\n"
+                    "All sessions have been added to the 'Imported from PuTTY' group.\n"
+                    "Changes will be saved automatically."
+                ).format(count)
+            QMessageBox.information(
+                self,
+                self.tr("Import Successful"),
+                msg,
+            )
+        elif count == 0:
+            QMessageBox.warning(
+                self,
+                self.tr("Import Failed"),
+                self.tr(
+                    "No valid sessions found in the selected file(s).\n\n"
+                    "Supported formats:\n"
+                    "- PuTTY registry export (.reg)\n"
+                    "- PuTTY portable (putty.ini)\n"
+                    "- KiTTY portable (kitty.ini)"
+                ),
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                self.tr("Import Failed"),
+                self.tr("Failed to import from PuTTY/KiTTY. Please check the file format."),
             )
 
     def _open_config_folder(self) -> None:

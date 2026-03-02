@@ -160,6 +160,12 @@ SSHive provides comprehensive backup and restore functionality to protect your S
 
 For detailed instructions on using backup and restore features, see the [Backup and Restore Guide](docs/BACKUP_AND_RESTORE.md).
 
+### Import from PuTTY/KiTTY
+
+SSHive can import sessions from PuTTY/KiTTY, including Linux PuTTY sessions files and directories.
+
+For full instructions and supported formats, see the [PuTTY/KiTTY Import Guide](docs/PUTTY_IMPORT.md).
+
 ### Keyboard Shortcuts
 
 - `Ctrl+I` - Toggle Incognito Mode (obfuscates server list)
