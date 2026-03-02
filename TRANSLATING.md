@@ -2,6 +2,10 @@
 
 Thank you for helping translate SSHive! This guide explains how to add or update translations.
 
+## Quick Start: Use Weblate
+
+**The easiest way to translate SSHive is on [Weblate](https://hosted.weblate.org/projects/sshive/).** Simply select your language and start translating — no repo cloning, no manual compilation needed.
+
 ## Overview
 
 SSHive uses the Qt Linguist translation system (`.ts` / `.qm` files). The source language is **English** and translation files live in `sshive/i18n/`.
@@ -13,7 +17,13 @@ For general developer setup and workflow, please refer to the [Contributing Guid
 | `.ts`     | XML source files that translators edit   |
 | `.qm`    | Compiled binary files loaded at runtime  |
 
-## Quick Start
+## For Translators: Use Weblate
+
+Visit [Weblate](https://hosted.weblate.org/projects/sshive/) and sign up. Select your language or request a new one, then start translating. That's it — your translations sync automatically.
+
+## For Developers: Manual Workflow
+
+If you need to update source strings or work with translations locally, use the manual process below.
 
 ### Prerequisites
 
@@ -126,6 +136,9 @@ If you skip this step, SSHive will fall back to Qt's built-in locale name, which
 
 ## Submitting Translations
 
+**Via Weblate (recommended):** Translations submitted on Weblate are automatically synced to the repository. No manual PR needed.
+
+**Manually:** If you prefer to contribute outside Weblate:
 1. Fork the repository
 2. Create a branch: `git checkout -b translate/<lang>`
 3. Add both the `.ts` and `.qm` files

@@ -4,6 +4,9 @@
 [![test](https://github.com/SavageCore/sshive/actions/workflows/test.yml/badge.svg)](https://github.com/SavageCore/sshive/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/SavageCore/sshive/graph/badge.svg?token=YOUR_TOKEN)](https://codecov.io/gh/SavageCore/sshive)
 [![release](https://img.shields.io/github/v/release/SavageCore/sshive)](https://github.com/SavageCore/sshive/releases)
+<a href="https://hosted.weblate.org/engage/sshive/">
+<img src="https://hosted.weblate.org/widget/sshive/svg-badge.svg" alt="Translation status" />
+</a>
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Your hive of SSH connections** - A modern, cross-platform SSH connection manager built with PySide6.
