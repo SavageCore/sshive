@@ -100,6 +100,51 @@ class MainWindow(QMainWindow):
         if last_visible >= 0:
             header.setSectionResizeMode(last_visible, QHeaderView.ResizeMode.Stretch)
 
+    @staticmethod
+    def _custom_icon_path(icon_value: str) -> Path | None:
+        """Resolve a custom icon path if icon value points to a local file."""
+        if not icon_value:
+            return None
+
+        candidate = Path(icon_value).expanduser()
+        if candidate.exists() and candidate.is_file():
+            return candidate
+        return None
+
+    def _custom_icons_dir(self) -> Path:
+        """Return directory where persisted custom icons are stored."""
+        return self.storage.config_file.parent / "custom_icons"
+
+    def _cleanup_orphan_custom_icons(self):
+        """Delete persisted custom icons no longer referenced by any connection."""
+        icon_dir = self._custom_icons_dir()
+        if not icon_dir.exists() or not icon_dir.is_dir():
+            return
+
+        referenced_files: set[Path] = set()
+        for conn in self.storage.load_connections():
+            if not conn.icon:
+                continue
+            icon_path = self._custom_icon_path(conn.icon)
+            if not icon_path:
+                continue
+            try:
+                resolved_path = icon_path.resolve()
+                if resolved_path.parent == icon_dir.resolve():
+                    referenced_files.add(resolved_path)
+            except OSError:
+                continue
+
+        for candidate in icon_dir.iterdir():
+            if not candidate.is_file():
+                continue
+            try:
+                resolved_candidate = candidate.resolve()
+                if resolved_candidate not in referenced_files:
+                    candidate.unlink()
+            except OSError:
+                continue
+
     def _setup_ui(self):
         """Setup the user interface."""
         # Central widget
@@ -538,11 +583,15 @@ class MainWindow(QMainWindow):
 
                 # Set icon
                 if conn.icon:
-                    icon = self.icon_manager.get_icon(conn.icon)
-                    if icon:
-                        conn_item.setIcon(0, icon)
+                    custom_icon_path = self._custom_icon_path(conn.icon)
+                    if custom_icon_path:
+                        conn_item.setIcon(0, QIcon(str(custom_icon_path)))
                     else:
-                        conn_item.setIcon(0, server_icon)
+                        icon = self.icon_manager.get_icon(conn.icon)
+                        if icon:
+                            conn_item.setIcon(0, icon)
+                        else:
+                            conn_item.setIcon(0, server_icon)
                 else:
                     conn_item.setIcon(0, server_icon)
 
@@ -627,6 +676,7 @@ class MainWindow(QMainWindow):
             connection = dialog.get_connection()
             if connection:
                 self.storage.add_connection(connection)
+                self._cleanup_orphan_custom_icons()
                 self._load_connections()
 
     def _clone_connection(self, item: QTreeWidgetItem | None = None):
@@ -664,6 +714,7 @@ class MainWindow(QMainWindow):
             cloned_connection = dialog.get_connection()
             if cloned_connection:
                 self.storage.add_connection(cloned_connection)
+                self._cleanup_orphan_custom_icons()
                 self._load_connections()
 
     def _edit_connection(self, item: QTreeWidgetItem | None = None):
@@ -690,6 +741,7 @@ class MainWindow(QMainWindow):
             updated_connection = dialog.get_connection()
             if updated_connection:
                 self.storage.update_connection(updated_connection)
+                self._cleanup_orphan_custom_icons()
                 self._load_connections()
 
     def _delete_connection(self, item: QTreeWidgetItem | None = None):
@@ -718,6 +770,7 @@ class MainWindow(QMainWindow):
 
         if reply == QMessageBox.StandardButton.Yes:
             self.storage.delete_connection(connection.id)
+            self._cleanup_orphan_custom_icons()
             self._load_connections()
 
     def _connect_to_selected_server(self):

@@ -3,7 +3,8 @@
 from pathlib import Path
 
 import qtawesome as qta
-from PySide6.QtCore import Qt
+from nanoid import generate
+from PySide6.QtCore import QStandardPaths, Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -25,8 +26,76 @@ from sshive.ui.icon_manager import IconManager
 from sshive.ui.theme import ThemeManager
 
 
+class IconDropLabel(QLabel):
+    """Clickable, droppable icon preview label."""
+
+    clicked = Signal()
+    file_dropped = Signal(str)
+    drag_active_changed = Signal(bool)
+    drag_preview_changed = Signal(str)
+
+    IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".bmp", ".gif", ".ico"}
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def _extract_image_path(self, event) -> str | None:
+        mime_data = event.mimeData()
+        if not mime_data or not mime_data.hasUrls():
+            return None
+
+        for url in mime_data.urls():
+            if not url.isLocalFile():
+                continue
+            file_path = Path(url.toLocalFile())
+            if file_path.suffix.lower() in self.IMAGE_EXTENSIONS:
+                return str(file_path)
+        return None
+
+    def dragEnterEvent(self, event):
+        preview_path = self._extract_image_path(event)
+        if preview_path:
+            self.drag_active_changed.emit(True)
+            self.drag_preview_changed.emit(preview_path)
+            event.acceptProposedAction()
+        else:
+            self.drag_active_changed.emit(False)
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        preview_path = self._extract_image_path(event)
+        if preview_path:
+            self.drag_active_changed.emit(True)
+            self.drag_preview_changed.emit(preview_path)
+            event.acceptProposedAction()
+        else:
+            self.drag_active_changed.emit(False)
+            event.ignore()
+
+    def dropEvent(self, event):
+        file_path = self._extract_image_path(event)
+        self.drag_active_changed.emit(False)
+        if file_path:
+            self.file_dropped.emit(file_path)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.drag_active_changed.emit(False)
+        super().dragLeaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
 class AddConnectionDialog(QDialog):
     """Dialog for adding or editing SSH connections."""
+
+    CUSTOM_ICON_ID_LENGTH = 5
 
     def __init__(
         self,
@@ -124,12 +193,20 @@ class AddConnectionDialog(QDialog):
         self.icon_input.setPlaceholderText(self.tr("e.g. proxmox, home-assistant"))
         self.icon_input.textChanged.connect(self._update_icon_preview_from_text)
 
-        self.icon_preview = QLabel()
+        self.icon_preview = IconDropLabel()
         self.icon_preview.setFixedSize(32, 32)
-        self.icon_preview.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
+        self._drag_is_active = False
+        self._drag_restore_tooltip = ""
+        self._drag_restore_pixmap = None
+        self._apply_icon_preview_style(False)
         self.icon_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.icon_preview.setToolTip(self.tr("No Icon"))
+        self.icon_preview.setToolTip(self.tr("No Icon (click or drop an image)"))
+        self.icon_preview.setCursor(Qt.CursorShape.PointingHandCursor)
         self.icon_preview.setPixmap(qta.icon("fa5s.image", color="gray").pixmap(20, 20))
+        self.icon_preview.clicked.connect(self._browse_icon)
+        self.icon_preview.file_dropped.connect(self._set_custom_icon)
+        self.icon_preview.drag_active_changed.connect(self._apply_icon_preview_style)
+        self.icon_preview.drag_preview_changed.connect(self._apply_drag_preview)
 
         icon_layout.addWidget(self.icon_input)
         icon_layout.addWidget(self.icon_preview)
@@ -210,14 +287,142 @@ class AddConnectionDialog(QDialog):
 
         if self.connection.icon:
             self.icon_input.setText(self.connection.icon)
-
-        if self.connection.icon:
-            self.icon_input.setText(self.connection.icon)
             self._update_icon_preview(self.connection.icon)
+
+    @staticmethod
+    def _is_custom_icon_path(value: str) -> bool:
+        """Check if the icon value should be treated as a file path."""
+        icon_value = value.strip()
+        if not icon_value:
+            return False
+
+        suffix = Path(icon_value).suffix.lower()
+        if suffix in IconDropLabel.IMAGE_EXTENSIONS:
+            return True
+
+        if icon_value.startswith(("/", "./", "../", "~")):
+            return True
+
+        return "/" in icon_value or "\\" in icon_value
+
+    def _apply_icon_preview_style(self, drag_active: bool):
+        """Apply icon preview border style, highlighting on drag-over."""
+        if drag_active:
+            if not self._drag_is_active:
+                self._drag_restore_tooltip = self.icon_preview.toolTip()
+                self._drag_restore_pixmap = self.icon_preview.pixmap()
+                self._drag_is_active = True
+
+            color = self.palette().highlight().color().name()
+            self.icon_preview.setStyleSheet(
+                "border: 1px solid gray; border-radius: 4px; background-color: rgba(88, 166, 255, 0.14);"
+            )
+            self.icon_preview.setCursor(Qt.CursorShape.DragCopyCursor)
+            self.icon_preview.setToolTip(self.tr("Drop image here"))
+            if not self.icon_input.text().strip() and not self.icon_preview.pixmap():
+                self.icon_preview.setPixmap(qta.icon("fa5s.upload", color=color).pixmap(20, 20))
+            return
+
+        self._drag_is_active = False
+        self.icon_preview.setStyleSheet("border: 1px solid gray; border-radius: 4px;")
+        self.icon_preview.setCursor(Qt.CursorShape.PointingHandCursor)
+        if self._drag_restore_tooltip:
+            self.icon_preview.setToolTip(self._drag_restore_tooltip)
+        if self._drag_restore_pixmap is not None:
+            self.icon_preview.setPixmap(self._drag_restore_pixmap)
+
+    def _apply_drag_preview(self, file_path: str):
+        """Show a live preview of the dragged icon while hovering."""
+        if not self._drag_is_active:
+            return
+
+        pixmap = QPixmap(file_path)
+        if pixmap.isNull():
+            return
+
+        self.icon_preview.setPixmap(
+            pixmap.scaled(
+                32,
+                32,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+
+    def _custom_icons_dir(self) -> Path:
+        """Get custom icon storage directory under app config."""
+        config_dir = Path(
+            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)
+        )
+        icon_dir = config_dir / "custom_icons"
+        icon_dir.mkdir(parents=True, exist_ok=True)
+        return icon_dir
+
+    def _persist_custom_icon(self, file_path: str) -> str | None:
+        """Copy and resize custom icon into app config storage."""
+        source_path = Path(file_path).expanduser()
+        if not source_path.exists() or not source_path.is_file():
+            return None
+
+        icon_dir = self._custom_icons_dir()
+        if source_path.parent == icon_dir:
+            return str(source_path)
+
+        pixmap = QPixmap(str(source_path))
+        if pixmap.isNull():
+            return None
+
+        scaled_pixmap = pixmap.scaled(
+            64,
+            64,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        target_path = None
+        for _ in range(10):
+            random_id = generate(size=self.CUSTOM_ICON_ID_LENGTH)
+            candidate = icon_dir / f"{random_id}.png"
+            if not candidate.exists():
+                target_path = candidate
+                break
+
+        if target_path is None:
+            return None
+
+        if not scaled_pixmap.save(str(target_path), "PNG"):
+            return None
+
+        return str(target_path)
+
+    def _browse_icon(self):
+        """Open file browser for custom icon selection."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Select Custom Icon"),
+            str(Path.home()),
+            self.tr(
+                "Image Files (*.png *.jpg *.jpeg *.webp *.svg *.bmp *.gif *.ico);;All Files (*)"
+            ),
+        )
+
+        if file_path:
+            self._set_custom_icon(file_path)
+
+    def _set_custom_icon(self, file_path: str):
+        """Set and persist a custom icon file path."""
+        persisted_path = self._persist_custom_icon(file_path)
+        if persisted_path:
+            self.icon_input.setText(persisted_path)
+        else:
+            self.icon_input.setText(str(Path(file_path).expanduser()))
 
     def _update_icon_preview_from_text(self, text):
         """Update icon preview based on text input."""
-        lower_text = text.lower()
+        if text and not self._is_custom_icon_path(text):
+            lower_text = text.lower()
+        else:
+            lower_text = text
+
         if text != lower_text:
             self.icon_input.setText(lower_text)
             return  # setText will re-trigger textChanged
@@ -227,8 +432,30 @@ class AddConnectionDialog(QDialog):
         """Update the icon preview label."""
         if not icon_name:
             self.icon_preview.clear()
-            self.icon_preview.setToolTip(self.tr("No Icon"))
+            self.icon_preview.setToolTip(self.tr("No Icon (click or drop an image)"))
             self.icon_preview.setPixmap(qta.icon("fa5s.image", color="gray").pixmap(20, 20))
+            return
+
+        if self._is_custom_icon_path(icon_name):
+            custom_path = Path(icon_name).expanduser()
+            if custom_path.exists() and custom_path.is_file():
+                pixmap = QPixmap(str(custom_path))
+                if not pixmap.isNull():
+                    self.icon_preview.setPixmap(
+                        pixmap.scaled(
+                            32,
+                            32,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation,
+                        )
+                    )
+                    self.icon_preview.setToolTip(str(custom_path))
+                    return
+
+            self.icon_preview.setPixmap(
+                qta.icon("fa5s.exclamation-circle", color="#e05252").pixmap(20, 20)
+            )
+            self.icon_preview.setToolTip(self.tr("Custom icon file not found or invalid"))
             return
 
         manager = IconManager.instance()
@@ -268,6 +495,9 @@ class AddConnectionDialog(QDialog):
 
     def _auto_fill_icon(self, name):
         """Auto-fill icon field based on connection name."""
+        if self.connection is not None:
+            return
+
         if not self.icon_input.text():
             # Convert name to kebab-case-ish (simplified)
             icon_name = name.lower().replace(" ", "-")
@@ -307,6 +537,11 @@ class AddConnectionDialog(QDialog):
         password = self.password_input.text() or None
         group = self.group_input.currentText().strip() or self.tr("Default")
         icon = self.icon_input.text().strip() or None
+
+        if icon and self._is_custom_icon_path(icon):
+            persisted_path = self._persist_custom_icon(icon)
+            if persisted_path:
+                icon = persisted_path
 
         try:
             if self.connection:

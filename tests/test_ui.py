@@ -5,6 +5,9 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
 from sshive.models.connection import SSHConnection
@@ -81,6 +84,149 @@ class TestMainWindow:
         # Group should have two children
         group_item = window.tree.topLevelItem(0)
         assert group_item.childCount() == 2
+
+    def test_load_connections_with_custom_icon_path(self, window, temp_storage):
+        """Custom icon file paths are used directly without icon manager fetch."""
+        icon_path = temp_storage.config_file.parent / "custom-icon.png"
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.GlobalColor.red)
+        assert pixmap.save(str(icon_path))
+
+        conn = SSHConnection(
+            name="Server1",
+            host="host1.com",
+            user="user1",
+            group="Work",
+            icon=str(icon_path),
+        )
+        temp_storage.add_connection(conn)
+
+        original_get_icon = window.icon_manager.get_icon
+
+        def fail_get_icon(_):
+            raise AssertionError("Icon manager should not be called for custom icon path")
+
+        window.icon_manager.get_icon = fail_get_icon
+        try:
+            window._load_connections()
+        finally:
+            window.icon_manager.get_icon = original_get_icon
+
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+        assert not conn_item.icon(0).isNull()
+
+    def test_delete_connection_cleans_orphan_custom_icons(self, window, temp_storage, monkeypatch):
+        """Deleting a connection removes unreferenced custom icon files."""
+        custom_icons_dir = temp_storage.config_file.parent / "custom_icons"
+        custom_icons_dir.mkdir(parents=True, exist_ok=True)
+
+        keep_icon = custom_icons_dir / "keep.png"
+        orphan_icon = custom_icons_dir / "orphan.png"
+
+        keep_pixmap = QPixmap(16, 16)
+        keep_pixmap.fill(Qt.GlobalColor.green)
+        assert keep_pixmap.save(str(keep_icon), "PNG")
+
+        orphan_pixmap = QPixmap(16, 16)
+        orphan_pixmap.fill(Qt.GlobalColor.yellow)
+        assert orphan_pixmap.save(str(orphan_icon), "PNG")
+
+        keep_conn = SSHConnection(
+            name="Keep Server",
+            host="keep.example.com",
+            user="keep",
+            icon=str(keep_icon),
+        )
+        delete_conn = SSHConnection(
+            name="Delete Server",
+            host="delete.example.com",
+            user="delete",
+            icon=str(orphan_icon),
+        )
+
+        temp_storage.add_connection(keep_conn)
+        temp_storage.add_connection(delete_conn)
+        window._load_connections()
+
+        monkeypatch.setattr(
+            "sshive.ui.main_window.QMessageBox.question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        )
+
+        group_item = window.tree.topLevelItem(0)
+        delete_item = None
+        for i in range(group_item.childCount()):
+            child = group_item.child(i)
+            conn = child.data(0, Qt.ItemDataRole.UserRole)
+            if conn and conn.id == delete_conn.id:
+                delete_item = child
+                break
+
+        assert delete_item is not None
+        window._delete_connection(delete_item)
+
+        remaining_ids = [conn.id for conn in temp_storage.load_connections()]
+        assert keep_conn.id in remaining_ids
+        assert delete_conn.id not in remaining_ids
+        assert keep_icon.exists()
+        assert not orphan_icon.exists()
+
+    def test_edit_connection_cleans_replaced_custom_icon(self, window, temp_storage, monkeypatch):
+        """Editing a connection icon removes the previously referenced custom icon file."""
+        custom_icons_dir = temp_storage.config_file.parent / "custom_icons"
+        custom_icons_dir.mkdir(parents=True, exist_ok=True)
+
+        old_icon = custom_icons_dir / "old.png"
+        new_icon = custom_icons_dir / "new.png"
+
+        old_pixmap = QPixmap(16, 16)
+        old_pixmap.fill(Qt.GlobalColor.cyan)
+        assert old_pixmap.save(str(old_icon), "PNG")
+
+        new_pixmap = QPixmap(16, 16)
+        new_pixmap.fill(Qt.GlobalColor.magenta)
+        assert new_pixmap.save(str(new_icon), "PNG")
+
+        conn = SSHConnection(
+            name="Edit Server",
+            host="edit.example.com",
+            user="edit",
+            icon=str(old_icon),
+        )
+        temp_storage.add_connection(conn)
+        window._load_connections()
+
+        class MockDialog:
+            def __init__(self, parent=None, connection=None, existing_groups=None):
+                self.connection = connection
+
+            def exec(self):
+                return True
+
+            def get_connection(self):
+                self.connection.icon = str(new_icon)
+                return self.connection
+
+        monkeypatch.setattr("sshive.ui.main_window.AddConnectionDialog", MockDialog)
+
+        group_item = window.tree.topLevelItem(0)
+        edit_item = None
+        for i in range(group_item.childCount()):
+            child = group_item.child(i)
+            item_conn = child.data(0, Qt.ItemDataRole.UserRole)
+            if item_conn and item_conn.id == conn.id:
+                edit_item = child
+                break
+
+        assert edit_item is not None
+        window._edit_connection(edit_item)
+
+        updated_connections = temp_storage.load_connections()
+        assert len(updated_connections) == 1
+        assert updated_connections[0].icon == str(new_icon)
+        assert not old_icon.exists()
+        assert new_icon.exists()
 
     def test_selection_enables_buttons(self, window, temp_storage, qtbot: QtBot):
         """Test that selecting a connection enables buttons."""
@@ -357,6 +503,53 @@ class TestAddConnectionDialog:
         assert dialog.port_input.value() == 2222
         assert dialog.group_input.currentText() == "Work"
         assert dialog.icon_input.text() == "proxmox"
+
+    def test_edit_mode_with_no_icon_keeps_icon_empty(self, qtbot: QtBot):
+        """Editing a connection without an icon should not auto-fill icon from name."""
+        conn = SSHConnection(
+            name="Original",
+            host="example.com",
+            user="testuser",
+            port=2222,
+            key_path="~/.ssh/id_rsa",
+            group="Work",
+            icon=None,
+        )
+
+        dialog = AddConnectionDialog(connection=conn)
+        qtbot.addWidget(dialog)
+
+        assert dialog.icon_input.text() == ""
+
+    def test_get_connection_persists_custom_icon_to_config(self, dialog, tmp_path, monkeypatch):
+        """Custom icon path is copied/resized into app config custom_icons directory."""
+        monkeypatch.setattr(
+            "sshive.ui.add_dialog.QStandardPaths.writableLocation", lambda *_: str(tmp_path)
+        )
+
+        source_icon = tmp_path / "source-large.png"
+        source_pixmap = QPixmap(256, 128)
+        source_pixmap.fill(Qt.GlobalColor.blue)
+        assert source_pixmap.save(str(source_icon), "PNG")
+
+        dialog.name_input.setText("Test Server")
+        dialog.host_input.setText("example.com")
+        dialog.user_input.setText("testuser")
+        dialog.icon_input.setText(str(source_icon))
+
+        conn = dialog.get_connection()
+
+        assert conn is not None
+        assert conn.icon is not None
+        stored_icon = Path(conn.icon)
+        assert stored_icon.exists()
+        assert stored_icon.parent == tmp_path / "custom_icons"
+        assert stored_icon.suffix.lower() == ".png"
+
+        stored_pixmap = QPixmap(str(stored_icon))
+        assert not stored_pixmap.isNull()
+        assert stored_pixmap.width() <= 64
+        assert stored_pixmap.height() <= 64
 
     def test_existing_groups_populated(self, qtbot: QtBot):
         """Test that existing groups are populated in dropdown."""
