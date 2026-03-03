@@ -5,6 +5,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from sshive.models.connection import SSHConnection
@@ -12,6 +13,57 @@ from sshive.models.connection import SSHConnection
 
 class SSHLauncher:
     """Handles launching SSH connections in appropriate terminal emulators."""
+
+    @staticmethod
+    def _convert_ppk_key(key_path: str, prefix: str = "sshive_key_") -> str | None:
+        """Convert PPK key to OpenSSH format on Linux/macOS.
+
+        Args:
+            key_path: Path to PPK key file
+            prefix: Prefix for temporary file name
+
+        Returns:
+            Path to converted key file, or None on failure or if not PPK
+        """
+        # Only convert on Linux/macOS if it's a PPK file
+        if not key_path.lower().endswith(".ppk") or sys.platform == "win32":
+            return None
+
+        puttygen = shutil.which("puttygen")
+        if not puttygen:
+            return None
+
+        # Create temp file and delete it so puttygen can create a fresh one
+        fd, temp_key_path = tempfile.mkstemp(prefix=prefix, suffix=".key")
+        os.close(fd)
+        os.unlink(temp_key_path)
+
+        try:
+            expanded_key_path = os.path.expanduser(key_path)
+            result = subprocess.run(
+                [puttygen, expanded_key_path, "-O", "private-openssh", "-o", temp_key_path],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0 or not os.path.exists(temp_key_path):
+                if os.path.exists(temp_key_path):
+                    os.unlink(temp_key_path)
+                return None
+
+            # Verify file has content
+            if os.path.getsize(temp_key_path) == 0:
+                os.unlink(temp_key_path)
+                return None
+
+            return temp_key_path
+        except Exception as e:
+            print(f"PPK conversion failed: {e}")
+            if os.path.exists(temp_key_path):
+                os.unlink(temp_key_path)
+            return None
 
     @staticmethod
     def detect_terminal() -> tuple[str, list[str]]:
@@ -74,50 +126,19 @@ class SSHLauncher:
 
             # Handle PPK conversion if necessary (Linux/macOS)
             temp_key = None
-            if (
-                connection.key_path
-                and connection.key_path.lower().endswith(".ppk")
-                and sys.platform != "win32"
-            ):
-                puttygen = shutil.which("puttygen")
-                if puttygen:
-                    import tempfile
-                    from pathlib import Path
-
-                    # Create a temporary file for the converted key
-                    fd, temp_key_path = tempfile.mkstemp(prefix="sshive_key_", suffix=".key")
-                    os.close(fd)
-                    temp_key = Path(temp_key_path)
-
-                    try:
-                        # Convert unencrypted PPK to OpenSSH format
-                        subprocess.run(
-                            [
-                                puttygen,
-                                connection.key_path,
-                                "-O",
-                                "private-openssh",
-                                "-o",
-                                temp_key_path,
-                            ],
-                            check=True,
-                            capture_output=True,
-                        )
-
-                        # Update ssh_cmd to use the converted key
-                        for i, arg in enumerate(ssh_cmd):
-                            if (
-                                arg == "-i"
-                                and i + 1 < len(ssh_cmd)
-                                and ssh_cmd[i + 1] == connection.key_path
-                            ):
-                                ssh_cmd[i + 1] = temp_key_path
-                                break
-                    except Exception as e:
-                        print(f"Failed to convert PPK key: {e}")
-                        if temp_key.exists():
-                            temp_key.unlink()
-                        temp_key = None
+            if connection.key_path:
+                converted = SSHLauncher._convert_ppk_key(connection.key_path, prefix="sshive_key_")
+                if converted:
+                    temp_key = Path(converted)
+                    # Update ssh_cmd to use the converted key
+                    for i, arg in enumerate(ssh_cmd):
+                        if (
+                            arg == "-i"
+                            and i + 1 < len(ssh_cmd)
+                            and ssh_cmd[i + 1] == connection.key_path
+                        ):
+                            ssh_cmd[i + 1] = converted
+                            break
 
             env = os.environ.copy()
 
@@ -252,49 +273,32 @@ class SSHLauncher:
                         False,
                         "Tunnel mode with password authentication is not supported on Windows.",
                     )
-
             # Handle PPK conversion if necessary (Linux/macOS)
             temp_key = None
-            if (
-                connection.key_path
-                and connection.key_path.lower().endswith(".ppk")
-                and sys.platform != "win32"
-            ):
-                puttygen = shutil.which("puttygen")
-                if puttygen:
-                    import tempfile
-
-                    fd, temp_key_path = tempfile.mkstemp(prefix="sshive_tunnel_", suffix=".key")
-                    os.close(fd)
-                    temp_key = Path(temp_key_path)
-
-                    try:
-                        subprocess.run(
-                            [
-                                puttygen,
-                                connection.key_path,
-                                "-O",
-                                "private-openssh",
-                                "-o",
-                                temp_key_path,
-                            ],
-                            check=True,
-                            capture_output=True,
+            if connection.key_path:
+                converted = SSHLauncher._convert_ppk_key(
+                    connection.key_path, prefix="sshive_tunnel_"
+                )
+                if converted:
+                    temp_key = Path(converted)
+                    # Update tunnel_cmd to use converted key
+                    for i, arg in enumerate(tunnel_cmd):
+                        if (
+                            arg == "-i"
+                            and i + 1 < len(tunnel_cmd)
+                            and tunnel_cmd[i + 1] == connection.key_path
+                        ):
+                            tunnel_cmd[i + 1] = converted
+                            break
+                elif connection.key_path.lower().endswith(".ppk") and sys.platform != "win32":
+                    # PPK file but couldn't convert
+                    puttygen = shutil.which("puttygen")
+                    if not puttygen:
+                        return (
+                            False,
+                            "PPK key format requires 'puttygen' to be installed for conversion on Linux/macOS.",
                         )
-
-                        # Update tunnel_cmd to use converted key
-                        for i, arg in enumerate(tunnel_cmd):
-                            if (
-                                arg == "-i"
-                                and i + 1 < len(tunnel_cmd)
-                                and tunnel_cmd[i + 1] == connection.key_path
-                            ):
-                                tunnel_cmd[i + 1] = temp_key_path
-                                break
-                    except Exception as e:
-                        if temp_key.exists():
-                            temp_key.unlink()
-                        return False, f"Failed to convert PPK key: {e}"
+                    return False, "Failed to convert PPK key. Check file permissions and format."
 
             # Clean environment variables
             if getattr(sys, "frozen", False):
@@ -356,6 +360,17 @@ class SSHLauncher:
             key_path = Path(connection.key_path).expanduser()
             if not key_path.exists():
                 return False, f"SSH key file doesn't exist: {connection.key_path}"
+
+            # Check if PPK conversion is available (Linux/macOS only)
+            if (
+                connection.key_path.lower().endswith(".ppk")
+                and sys.platform != "win32"
+                and not shutil.which("puttygen")
+            ):
+                return (
+                    False,
+                    "PPK key format requires 'puttygen' to be installed for conversion on Linux/macOS.",
+                )
 
         # Check for password providers
         if connection.password:
@@ -503,8 +518,16 @@ class SSHLauncher:
             "BatchMode=yes",
         ]
 
+        temp_key = None
         if connection.key_path:
             key_path = str(Path(connection.key_path).expanduser())
+
+            # Handle PPK conversion if necessary (Linux/macOS)
+            converted = SSHLauncher._convert_ppk_key(connection.key_path, prefix="sshive_debug_")
+            if converted:
+                temp_key = Path(converted)
+                key_path = converted
+
             cmd.extend(["-i", key_path])
 
         cmd.append(f"{connection.user}@{connection.host}")
@@ -517,21 +540,34 @@ class SSHLauncher:
         ]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds)
-            body = [f"Return code: {result.returncode}", "", result.stderr or result.stdout or ""]
-            return "\n".join(header + body)
-        except subprocess.TimeoutExpired as exc:
-            stderr = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
-            stdout = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
-            body = [
-                f"Timed out after {timeout_seconds:.1f}s",
-                "",
-                stderr or stdout or "No output captured before timeout.",
-            ]
-            return "\n".join(header + body)
-        except Exception as exc:
-            body = ["Failed to collect debug log.", "", str(exc)]
-            return "\n".join(header + body)
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=timeout_seconds
+                )
+                body = [
+                    f"Return code: {result.returncode}",
+                    "",
+                    result.stderr or result.stdout or "",
+                ]
+                return "\n".join(header + body)
+            except subprocess.TimeoutExpired as exc:
+                stderr = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
+                stdout = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+                body = [
+                    f"Timed out after {timeout_seconds:.1f}s",
+                    "",
+                    stderr or stdout or "No output captured before timeout.",
+                ]
+                return "\n".join(header + body)
+            except Exception as exc:
+                body = ["Failed to collect debug log.", "", str(exc)]
+                return "\n".join(header + body)
+        finally:
+            if temp_key and temp_key.exists():
+                try:
+                    temp_key.unlink()
+                except Exception:
+                    pass
 
     @staticmethod
     def check_credentials(connection: SSHConnection) -> tuple[bool, str | None]:
@@ -560,28 +596,26 @@ class SSHLauncher:
                 base_ssh_args.extend(["-o", "BatchMode=yes"])
             else:
                 base_ssh_args.extend(["-o", "BatchMode=no"])
-
             env = os.environ.copy()
             if sys.platform != "win32":
                 key_path = connection.key_path
-                if key_path and key_path.endswith(".ppk"):
-                    # On Linux/macOS, convert PPK to OpenSSH for the check
-                    puttygen = shutil.which("puttygen")
-                    if puttygen:
-                        import tempfile
-
-                        handle, temp_key = tempfile.mkstemp(prefix="sshive_key_")
-                        os.close(handle)
-                        try:
-                            subprocess.run(
-                                [puttygen, key_path, "-O", "private-openssh", "-o", temp_key],
-                                check=True,
-                                capture_output=True,
+                if key_path:
+                    converted = SSHLauncher._convert_ppk_key(key_path, prefix="sshive_key_")
+                    if converted:
+                        temp_key = converted
+                        key_path = converted
+                    elif key_path.lower().endswith(".ppk"):
+                        # PPK file but couldn't convert
+                        puttygen = shutil.which("puttygen")
+                        if not puttygen:
+                            return (
+                                False,
+                                "PPK key format requires 'puttygen' to be installed for conversion on Linux/macOS.",
                             )
-                            key_path = temp_key
-                        except subprocess.CalledProcessError:
-                            os.unlink(temp_key)
-                            return False, "Failed to convert PPK key for authentication check."
+                        return (
+                            False,
+                            "Failed to convert PPK key. Check file permissions and format.",
+                        )
 
                 cmd = ["ssh", "-p", str(connection.port)]
                 cmd.extend(base_ssh_args)
