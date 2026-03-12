@@ -6,7 +6,7 @@ pkgdesc="Your hive of SSH connections - A modern SSH connection manager"
 arch=('any')
 url="https://github.com/SavageCore/sshive"
 license=('MIT')
-depends=('python' 'pyside6' 'python-qtawesome' 'python-packaging' 'python-platformdirs' 'python-nanoid')
+depends=('python' 'pyside6-essentials' 'python-qtawesome' 'python-packaging' 'python-platformdirs' 'python-nanoid')
 makedepends=('python-build' 'python-installer' 'python-hatchling')
 
 _local_repo=0
