@@ -91,11 +91,6 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: uv run pyinstaller --clean sshive.spec
 
-      # macOS-specific build
-      - name: Install Build Dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: uv pip install Pillow
-
       - name: Build macOS App Bundle
         if: matrix.os == 'macos-latest'
         run: |
