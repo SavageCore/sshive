@@ -1,12 +1,13 @@
-# -*- mode: python ; coding: utf-8 -*-
+# -*- mode: python ; -*-
+# type: ignore
 
 
-a = Analysis(
-    ['sshive/main.py'],
+a = Analysis(  # noqa: F821
+    ["sshive/main.py"],
     pathex=[],
     binaries=[],
-    datas=[('sshive/resources', 'sshive/resources')],
-    hiddenimports=['PySide6.QtXml', 'PySide6.QtNetwork'],
+    datas=[("sshive/resources", "sshive/resources")],
+    hiddenimports=["PySide6.QtXml", "PySide6.QtNetwork"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -14,14 +15,14 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-pyz = PYZ(a.pure)
+pyz = PYZ(a.pure)  # noqa: F821
 
-exe = EXE(
+exe = EXE(  # noqa: F821
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
-    name='sshive',
+    name="SSHive",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -34,9 +35,9 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['sshive/resources/icon.png'],
+    icon=["sshive/resources/icon.png"],
 )
-coll = COLLECT(
+coll = COLLECT(  # noqa: F821
     exe,
     a.binaries,
     a.zipfiles,
@@ -44,11 +45,11 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='sshive',
+    name="SSHive",
 )
-app = BUNDLE(
+app = BUNDLE(  # noqa: F821
     coll,
-    name='sshive.app',
-    icon='sshive/resources/icon.png',
-    bundle_identifier='org.sshive.SSHive',
+    name="SSHive.app",
+    icon="sshive/resources/icon.png",
+    bundle_identifier="org.sshive.SSHive",
 )

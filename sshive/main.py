@@ -22,7 +22,7 @@ def get_resource_path(filename: str) -> str:
     """Get path to resource file."""
     if getattr(sys, "frozen", False):
         # Handle PyInstaller temporary folder path
-        base_path = Path(sys._MEIPASS)
+        base_path = Path(sys._MEIPASS)  # type: ignore
         return str(base_path / "sshive" / "resources" / filename)
 
     resource_dir = Path(__file__).parent / "resources"
@@ -72,7 +72,7 @@ def _resolve_locale(settings: QSettings) -> str:
     """
     saved = settings.value("language", "system")
     if saved and saved != "system":
-        return saved
+        return saved  # pyright: ignore[reportReturnType]
     return QLocale.system().name()
 
 
@@ -122,10 +122,11 @@ def main():
     app.setStyle("Fusion")
 
     # Set application metadata early for QStandardPaths
-    app.setApplicationName("sshive")
+    app.setApplicationName("SSHive")
+    app.setApplicationDisplayName("SSHive")
     app.setOrganizationName("")  # Prevent nested config folder
     app.setApplicationVersion("0.0.0")
-    app.setDesktopFileName("sshive")
+    app.setDesktopFileName("SSHive")
 
     # Load saved language preference (requires app metadata to be set first)
     settings = QSettings("sshive", "sshive")

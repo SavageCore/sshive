@@ -407,7 +407,9 @@ class TestMainWindow:
         monkeypatch.setattr(
             "sshive.ui.main_window.SSHLauncher.test_connection", lambda connection: (True, None)
         )
-        monkeypatch.setattr("sshive.ui.main_window.SSHLauncher.launch", lambda connection: True)
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.launch", lambda connection, **kwargs: True
+        )
 
         group_item = window.tree.topLevelItem(0)
         conn_item = group_item.child(0)
@@ -427,7 +429,9 @@ class TestMainWindow:
         monkeypatch.setattr(
             "sshive.ui.main_window.SSHLauncher.test_connection", lambda connection: (True, None)
         )
-        monkeypatch.setattr("sshive.ui.main_window.SSHLauncher.launch", lambda connection: True)
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.launch", lambda connection, **kwargs: True
+        )
 
         group_item = window.tree.topLevelItem(0)
         conn_item = group_item.child(0)

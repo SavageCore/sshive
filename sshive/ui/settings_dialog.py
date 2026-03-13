@@ -1,5 +1,6 @@
 """Settings dialog for SSHive."""
 
+import shutil
 from pathlib import Path
 
 from PySide6.QtCore import QLocale
@@ -14,6 +15,8 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
 )
+
+from sshive.ssh.launcher import SSHLauncher
 
 # Maps locale code -> human-readable name shown in the combo box
 _LANGUAGE_NAMES: dict[str, str] = {
@@ -82,6 +85,25 @@ class SettingsDialog(QDialog):
         # General settings
         gen_group = QGroupBox(self.tr("General"))
         gen_layout = QVBoxLayout()
+
+        # Terminal selection (all OSes)
+        self.terminal_label = QLabel(self.tr("Preferred Terminal:"))
+        self.terminal_combo = QComboBox()
+        self.terminal_combo.addItem(self.tr("System Default"), userData="auto")
+        terminals = SSHLauncher.get_terminals()
+        for key, cmd in terminals.items():
+            if cmd[0] == "open" or shutil.which(cmd[0]):
+                display = key[0].upper() + key[1:]
+                self.terminal_combo.addItem(display, userData=key)
+        saved_term = self.settings.value("preferred_terminal", "auto")
+        idx = 0
+        for i in range(self.terminal_combo.count()):
+            if self.terminal_combo.itemData(i) == saved_term:
+                idx = i
+                break
+        self.terminal_combo.setCurrentIndex(idx)
+        gen_layout.addWidget(self.terminal_label)
+        gen_layout.addWidget(self.terminal_combo)
 
         self.verify_check = QCheckBox(self.tr("Verify credentials before connecting"))
         self.verify_check.setToolTip(
@@ -230,7 +252,7 @@ class SettingsDialog(QDialog):
             Dictionary of settings
         """
         theme_map = {0: "System", 1: "Dark", 2: "Light"}
-        return {
+        settings = {
             "verify_credentials": self.verify_check.isChecked(),
             "check_updates_startup": self.update_check.isChecked(),
             "connection_test_debug": self.connection_test_debug_check.isChecked(),
@@ -241,3 +263,6 @@ class SettingsDialog(QDialog):
             "language": self.lang_combo.currentData(),
             "column_visibility": {idx: check.isChecked() for idx, check in self.col_checks},
         }
+        if self.terminal_combo:
+            settings["preferred_terminal"] = self.terminal_combo.currentData()
+        return settings

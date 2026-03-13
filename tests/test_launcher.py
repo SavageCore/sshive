@@ -1,6 +1,8 @@
 """Tests for SSH launcher."""
 
+import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -20,7 +22,7 @@ class TestSSHLauncher:
         assert isinstance(cmd_template, list)
         assert len(cmd_template) > 0
 
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_detect_terminal_konsole(self, mock_which):
         """Test detection of konsole terminal."""
 
@@ -29,17 +31,19 @@ class TestSSHLauncher:
 
         mock_which.side_effect = which_side_effect
 
-        terminal_name, cmd_template = SSHLauncher.detect_terminal()
+        with patch("sys.platform", "linux"):
+            terminal_name, cmd_template = SSHLauncher.detect_terminal()
 
         assert terminal_name == "konsole"
         assert cmd_template[0] == "konsole"
 
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_detect_terminal_fallback(self, mock_which):
         """Test fallback to xterm when no terminal found."""
         mock_which.return_value = None
 
-        terminal_name, cmd_template = SSHLauncher.detect_terminal()
+        with patch("sys.platform", "linux"):
+            terminal_name, cmd_template = SSHLauncher.detect_terminal()
 
         # Should fallback to xterm
         assert terminal_name == "xterm"
@@ -126,7 +130,7 @@ class TestSSHLauncher:
             assert result is False
             assert msg is not None
 
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_test_connection_no_ssh(self, mock_which):
         """Test connection test when ssh command doesn't exist."""
         mock_which.return_value = None
@@ -173,7 +177,7 @@ class TestSSHLauncher:
 
     @patch("sshive.ssh.launcher.socket.create_connection")
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_test_connectivity_success_with_ping(
         self, mock_which, mock_run, mock_create_connection
     ):
@@ -194,7 +198,7 @@ class TestSSHLauncher:
 
     @patch("sshive.ssh.launcher.socket.create_connection")
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_test_connectivity_port_open_ping_blocked(
         self, mock_which, mock_run, mock_create_connection
     ):
@@ -215,7 +219,7 @@ class TestSSHLauncher:
 
     @patch("sshive.ssh.launcher.socket.create_connection")
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_test_connectivity_port_unreachable(self, mock_which, mock_run, mock_create_connection):
         """Connectivity check fails when SSH port is unreachable."""
         mock_which.return_value = "/usr/bin/ping"
@@ -229,7 +233,7 @@ class TestSSHLauncher:
         assert "not reachable" in message.lower()
 
     @patch("subprocess.Popen")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
     def test_launch_with_password_linux(self, mock_detect, mock_which, mock_popen):
         """Test launching connection with password on Linux."""
@@ -257,7 +261,7 @@ class TestSSHLauncher:
             assert env.get("SSHPASS") == "secretpassword"
 
     @patch("subprocess.Popen")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
     def test_launch_with_password_windows(self, mock_detect, mock_which, mock_popen):
         """Test launching connection with password on Windows using plink."""
@@ -280,7 +284,7 @@ class TestSSHLauncher:
             assert "-pw" in call_args
             assert "secretpassword" in call_args
 
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_test_connection_password_provider(self, mock_which):
         """Test connection test checks for password providers."""
         conn = SSHConnection(name="Test", host="example.com", user="testuser", password="pass")
@@ -314,7 +318,7 @@ class TestSSHLauncher:
             assert msg is None
 
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_check_credentials_success(self, mock_which, mock_run):
         """Test authentication check success."""
         mock_which.side_effect = lambda cmd: (
@@ -338,7 +342,7 @@ class TestSSHLauncher:
             assert any("PubkeyAuthentication=no" in arg for arg in args)
 
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_check_credentials_failure(self, mock_which, mock_run):
         """Test authentication check failure (permission denied)."""
         mock_which.side_effect = lambda cmd: (
@@ -356,7 +360,7 @@ class TestSSHLauncher:
             assert "Permission denied" in msg
 
     @patch("subprocess.Popen")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
     def test_launch_terminal_wrapping_linux(self, mock_detect, mock_which, mock_popen):
         """Test that terminal command is wrapped with bash and pause on Linux."""
@@ -378,7 +382,7 @@ class TestSSHLauncher:
             assert "Connection failed" in cmd_str
 
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_check_credentials_key_success(self, mock_which, mock_run):
         """Test credential check success with SSH key."""
         mock_which.return_value = "/usr/bin/ssh"
@@ -401,7 +405,7 @@ class TestSSHLauncher:
         assert any("BatchMode=yes" in arg for arg in args)
 
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_check_credentials_key_failure(self, mock_which, mock_run):
         """Test credential check failure with SSH key."""
         mock_which.return_value = "/usr/bin/ssh"
@@ -417,7 +421,7 @@ class TestSSHLauncher:
         assert "Permission denied" in error
 
     @patch("subprocess.run")
-    @patch("shutil.which")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
     def test_collect_ssh_debug_log(self, mock_which, mock_run):
         """Debug log collection includes return code and output."""
         mock_which.return_value = "/usr/bin/ssh"
@@ -497,3 +501,71 @@ class TestSSHLauncher:
         assert success is False
         assert "Authentication check failed" in message
         assert "Permission denied" in message
+
+
+class TestWhichHelper:
+    """Test cases for SSHLauncher._which PATH augmentation."""
+
+    def test_which_finds_existing_binary(self):
+        """_which finds a binary that exists on the normal PATH."""
+        # 'ls' should exist on all platforms
+        result = SSHLauncher._which("ls")
+        assert result is not None
+        assert "ls" in result
+
+    def test_which_returns_none_for_missing_binary(self):
+        """_which returns None for a nonexistent binary."""
+        result = SSHLauncher._which("definitely_not_a_real_binary_12345")
+        assert result is None
+
+    @patch.dict(os.environ, {"PATH": "/usr/bin:/bin"}, clear=False)
+    def test_which_augments_path_in_frozen_build(self):
+        """In a frozen build with a restricted PATH, _which searches extra dirs."""
+        with patch("shutil.which") as mock_which:
+            # First call (normal PATH) returns None, second call (augmented) finds it
+            mock_which.side_effect = [None, "/usr/local/bin/puttygen"]
+
+            with patch.object(sys, "frozen", True, create=True):
+                result = SSHLauncher._which("puttygen")
+
+            assert result == "/usr/local/bin/puttygen"
+            assert mock_which.call_count == 2
+            # Second call should include augmented path
+            _, kwargs = mock_which.call_args
+            assert "/usr/local/bin" in kwargs["path"]
+            assert "/opt/homebrew/bin" in kwargs["path"]
+
+    def test_which_does_not_augment_when_not_frozen(self):
+        """When not in a frozen build, _which does not augment PATH."""
+        with patch("shutil.which", return_value=None) as mock_which:
+            result = SSHLauncher._which("puttygen")
+
+            assert result is None
+            # Should only be called once - no augmented retry
+            mock_which.assert_called_once_with("puttygen")
+
+    @patch.dict(os.environ, {"PATH": "/usr/bin:/bin"}, clear=False)
+    def test_which_frozen_still_returns_none_if_not_found(self):
+        """In a frozen build, _which returns None if binary not in extra paths either."""
+        with patch("shutil.which", return_value=None) as mock_which:
+            with patch.object(sys, "frozen", True, create=True):
+                result = SSHLauncher._which("definitely_not_a_real_binary_12345")
+
+            assert result is None
+            assert mock_which.call_count == 2
+
+    @patch.dict(os.environ, {"PATH": "/usr/bin:/bin"}, clear=False)
+    def test_which_frozen_skips_already_present_paths(self):
+        """In a frozen build, _which doesn't duplicate paths already in PATH."""
+        with patch("shutil.which") as mock_which:
+            mock_which.side_effect = [None, None]
+
+            with patch.object(sys, "frozen", True, create=True):
+                SSHLauncher._which("something")
+
+            _, kwargs = mock_which.call_args
+            augmented = kwargs["path"]
+            parts = augmented.split(os.pathsep)
+            # /usr/bin and /bin are already in PATH, should not be duplicated
+            assert parts.count("/usr/bin") == 1
+            assert parts.count("/bin") == 1

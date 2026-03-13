@@ -3,6 +3,7 @@
     "charliermarsh.ruff",
     // "ms-python.isort", // not needed with ruff
     "ms-python.python",
-    "tamasfe.even-better-toml"
+    "tamasfe.even-better-toml",
+    "claui.packaging"
   ]
 }

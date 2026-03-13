@@ -3,20 +3,25 @@
 import hashlib
 import json
 import os
+import random
 import subprocess
 import uuid
 from pathlib import Path
 
 import qtawesome as qta
-from PySide6.QtCore import QSettings, QStandardPaths, Qt
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import QEvent, QObject, QSettings, QStandardPaths, Qt
+from PySide6.QtGui import QAction, QIcon, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -239,10 +244,6 @@ class MainWindow(QMainWindow):
             has_search: Whether to show a search input field
             header_widget: Optional widget to display at the top (e.g., QLabel, QLineEdit)
         """
-        from PySide6.QtCore import QEvent, QObject, Qt
-        from PySide6.QtGui import QKeyEvent
-        from PySide6.QtWidgets import QDialog, QHBoxLayout, QListWidget, QVBoxLayout
-
         # Ensure main window is activated (required for Wayland grabbing popup)
         self.raise_()
         self.activateWindow()
@@ -343,9 +344,6 @@ class MainWindow(QMainWindow):
 
     def _show_quick_connect_dialog(self):
         """Show a quick connection search popup at the top center of the screen."""
-        from PySide6.QtCore import Qt
-        from PySide6.QtWidgets import QListWidgetItem
-
         # Create search input
         search_input = QLineEdit(self)
         search_input.setPlaceholderText(self.tr("Type to filter connections..."))
@@ -395,11 +393,6 @@ class MainWindow(QMainWindow):
 
     def _show_recent_connections_menu(self):
         """Show a recent connections popup dialog."""
-        import random
-
-        from PySide6.QtCore import Qt
-        from PySide6.QtWidgets import QLabel, QListWidgetItem
-
         # Create info label
         info_label = QLabel(self.tr("Your most recently used connections:"))
 
@@ -1508,7 +1501,8 @@ class MainWindow(QMainWindow):
             )
         else:
             # Launch terminal shell connection
-            success = SSHLauncher.launch(connection)
+            preferred_terminal = self.settings.value("preferred_terminal", "auto")
+            success = SSHLauncher.launch(connection, preferred_terminal=preferred_terminal)
 
             if not success:
                 QMessageBox.warning(
@@ -1648,6 +1642,10 @@ class MainWindow(QMainWindow):
             # Update column visibility
             for idx, visible in settings["column_visibility"].items():
                 self.tree.setColumnHidden(idx, not visible)
+
+            # Save preferred terminal
+            preferred_terminal = settings.get("preferred_terminal", "auto")
+            self.settings.setValue("preferred_terminal", preferred_terminal)
 
             # Save theme preference and apply
             theme_val = settings.get("theme_preference", "System")
