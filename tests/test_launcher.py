@@ -359,6 +359,74 @@ class TestSSHLauncher:
             assert result is False
             assert "Permission denied" in msg
 
+    @patch("subprocess.run")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
+    def test_check_credentials_host_key_mismatch(self, mock_which, mock_run):
+        """Host key mismatch is surfaced with a specific actionable error."""
+        mock_which.side_effect = lambda cmd: (
+            "/usr/bin/sshpass" if cmd == "sshpass" else "/usr/bin/ssh"
+        )
+        mock_run.return_value = MagicMock(
+            returncode=255,
+            stderr="WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\nHost key verification failed.",
+            stdout="",
+        )
+
+        with patch("sys.platform", "linux"):
+            conn = SSHConnection(
+                name="Test", host="example.com", user="testuser", password="secretpassword"
+            )
+            result, msg = SSHLauncher.check_credentials(conn)
+
+            assert result is False
+            assert "Host key mismatch detected" in msg
+
+    def test_is_host_key_mismatch_error_detects_known_patterns(self):
+        """Known OpenSSH mismatch messages are detected."""
+        assert SSHLauncher.is_host_key_mismatch_error(
+            "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!"
+        )
+        assert SSHLauncher.is_host_key_mismatch_error("Host key verification failed")
+        assert not SSHLauncher.is_host_key_mismatch_error("Permission denied")
+
+    @patch("subprocess.run")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
+    def test_resolve_host_key_mismatch_default_port(self, mock_which, mock_run):
+        """Known_hosts cleanup removes hostname entry for default SSH port."""
+        mock_which.return_value = "/usr/bin/ssh-keygen"
+        mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="")
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser", port=22)
+        success, error = SSHLauncher.resolve_host_key_mismatch(conn)
+
+        assert success is True
+        assert error is None
+        mock_run.assert_called_once_with(
+            ["/usr/bin/ssh-keygen", "-R", "example.com"],
+            capture_output=True,
+            text=True,
+            timeout=4,
+        )
+
+    @patch("subprocess.run")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
+    def test_resolve_host_key_mismatch_custom_port(self, mock_which, mock_run):
+        """Known_hosts cleanup removes both bracketed host:port and plain hostname entries."""
+        mock_which.return_value = "/usr/bin/ssh-keygen"
+        mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="")
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser", port=2222)
+        success, error = SSHLauncher.resolve_host_key_mismatch(conn)
+
+        assert success is True
+        assert error is None
+        assert mock_run.call_count == 2
+
+        first_call = mock_run.call_args_list[0]
+        second_call = mock_run.call_args_list[1]
+        assert first_call.args[0] == ["/usr/bin/ssh-keygen", "-R", "[example.com]:2222"]
+        assert second_call.args[0] == ["/usr/bin/ssh-keygen", "-R", "example.com"]
+
     @patch("subprocess.Popen")
     @patch("sshive.ssh.launcher.SSHLauncher._which")
     @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")

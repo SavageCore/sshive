@@ -897,6 +897,9 @@ class AddConnectionDialog(QDialog):
         try:
             QApplication.processEvents()
             success, message = SSHLauncher.test_full_connection(connection)
+            if not success and SSHLauncher.is_host_key_mismatch_error(message):
+                if self._prompt_trust_changed_host_key(connection, message):
+                    success, message = SSHLauncher.test_full_connection(connection)
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -911,6 +914,41 @@ class AddConnectionDialog(QDialog):
             debug_log = SSHLauncher.collect_ssh_debug_log(connection)
             title = self.tr("Connection Test Failed")
             show_connection_test_debug_dialog(self, title, connection, message, debug_log)
+
+    def _prompt_trust_changed_host_key(self, connection: SSHConnection, details: str) -> bool:
+        """Ask whether to trust a changed host key and update known_hosts entries."""
+        reply = QMessageBox.question(
+            self,
+            self.tr("Host Key Changed"),
+            self.tr(
+                "SSHive detected that the host key for {host}:{port} has changed.\n\n"
+                "This can happen after a server reinstall, but it can also indicate a security risk.\n\n"
+                "Do you want to trust the new host key and update your known_hosts entry?"
+            ).format(host=connection.host, port=connection.port),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return False
+
+        updated, update_error = SSHLauncher.resolve_host_key_mismatch(connection)
+        if not updated:
+            QMessageBox.critical(
+                self,
+                self.tr("Host Key Update Failed"),
+                self.tr(
+                    "Could not update known_hosts for {host}:{port}.\n\n{error}\n\nDetails:\n{details}"
+                ).format(
+                    host=connection.host,
+                    port=connection.port,
+                    error=update_error or self.tr("Unknown error"),
+                    details=details,
+                ),
+            )
+            return False
+
+        return True
 
     def get_connection(self) -> SSHConnection | None:
         """Get connection from form data.

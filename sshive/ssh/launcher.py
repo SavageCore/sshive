@@ -25,6 +25,13 @@ class SSHLauncher:
         "/sbin",
     ]
 
+    _HOST_KEY_MISMATCH_MARKERS = (
+        "host key verification failed",
+        "remote host identification has changed",
+        "warning: remote host identification has changed",
+        "offending ",
+    )
+
     @staticmethod
     def _which(name: str) -> str | None:
         """Find an executable by name, augmenting PATH in frozen builds.
@@ -740,6 +747,14 @@ class SSHLauncher:
                 result.stderr.strip() or result.stdout.strip() or f"Exit code {result.returncode}"
             )
 
+            if SSHLauncher.is_host_key_mismatch_error(error_msg):
+                return (
+                    False,
+                    "Host key mismatch detected. The saved host key does not match the server. "
+                    "Review and trust the new key before reconnecting.\n\n"
+                    f"{error_msg}",
+                )
+
             if "Permission denied" in error_msg:
                 return (
                     False,
@@ -760,3 +775,51 @@ class SSHLauncher:
                     os.unlink(temp_key)
                 except Exception:
                     pass
+
+    @staticmethod
+    def is_host_key_mismatch_error(error_text: str | None) -> bool:
+        """Return True if stderr/stdout text indicates a host key mismatch."""
+        if not error_text:
+            return False
+
+        normalized = error_text.strip().lower()
+        return any(marker in normalized for marker in SSHLauncher._HOST_KEY_MISMATCH_MARKERS)
+
+    @staticmethod
+    def resolve_host_key_mismatch(connection: SSHConnection) -> tuple[bool, str | None]:
+        """Remove stale host key entries so a new key can be accepted on next connect."""
+        ssh_keygen = SSHLauncher._which("ssh-keygen")
+        if not ssh_keygen:
+            return False, "ssh-keygen not found in PATH."
+
+        host = connection.host.strip()
+        if not host:
+            return False, "Host is empty."
+
+        targets = [host]
+        if connection.port != 22:
+            targets.insert(0, f"[{host}]:{connection.port}")
+
+        failures: list[str] = []
+
+        for target in targets:
+            try:
+                result = subprocess.run(
+                    [ssh_keygen, "-R", target],
+                    capture_output=True,
+                    text=True,
+                    timeout=4,
+                )
+                if result.returncode != 0:
+                    detail = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                    failures.append(f"{target}: {detail}")
+            except Exception as exc:
+                failures.append(f"{target}: {exc}")
+
+        if failures:
+            return (
+                False,
+                "Failed to remove old host key entries:\n" + "\n".join(failures),
+            )
+
+        return True, None

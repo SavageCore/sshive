@@ -419,6 +419,49 @@ class TestMainWindow:
         assert len(recent) == 1
         assert recent[0]["id"] == conn.id
 
+    def test_connect_host_key_mismatch_prompts_and_retries(self, window, temp_storage, monkeypatch):
+        """A host-key mismatch prompts trust flow, updates known_hosts, and retries auth."""
+        conn = SSHConnection(
+            name="Seedbox",
+            host="seedbox.example.com",
+            user="root",
+            key_path="~/.ssh/id_rsa",
+        )
+        temp_storage.add_connection(conn)
+        window._load_connections()
+
+        attempts = {"count": 0}
+
+        def fake_check_credentials(_connection):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                return False, "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!"
+            return True, None
+
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.test_connection", lambda connection: (True, None)
+        )
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.check_credentials", fake_check_credentials
+        )
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.resolve_host_key_mismatch",
+            lambda connection: (True, None),
+        )
+        monkeypatch.setattr(
+            "sshive.ui.main_window.QMessageBox.question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        )
+        monkeypatch.setattr(
+            "sshive.ui.main_window.SSHLauncher.launch", lambda connection, **kwargs: True
+        )
+
+        group_item = window.tree.topLevelItem(0)
+        conn_item = group_item.child(0)
+        window._connect_to_server(conn_item)
+
+        assert attempts["count"] == 2
+
     def test_connect_skips_recent_history_when_disabled(self, window, temp_storage, monkeypatch):
         """History is not recorded when save_recent_history setting is disabled."""
         conn = SSHConnection(name="Prod", host="prod.example.com", user="root", port=2222)
@@ -799,6 +842,42 @@ class TestAddConnectionDialog:
 
         assert called["full_test"] is True
         assert called["debug_dialog"] is True
+
+    def test_test_button_host_key_mismatch_prompts_and_retries(self, dialog, monkeypatch):
+        """Host-key mismatch in test flow prompts trust and retries once."""
+        dialog.name_input.setText("Seedbox")
+        dialog.host_input.setText("seedbox.example.com")
+        dialog.user_input.setText("root")
+        dialog.key_input.setText("~/.ssh/id_rsa")
+
+        attempts = {"count": 0}
+        called = {"info": False}
+
+        def fake_full_test(connection):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                return False, "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!"
+            return True, "Full connection test passed."
+
+        def fake_information(parent, title, text):
+            called["info"] = True
+            return QMessageBox.StandardButton.Ok
+
+        monkeypatch.setattr("sshive.ui.add_dialog.SSHLauncher.test_full_connection", fake_full_test)
+        monkeypatch.setattr(
+            "sshive.ui.add_dialog.SSHLauncher.resolve_host_key_mismatch",
+            lambda connection: (True, None),
+        )
+        monkeypatch.setattr(
+            "sshive.ui.add_dialog.QMessageBox.question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        )
+        monkeypatch.setattr("sshive.ui.add_dialog.QMessageBox.information", fake_information)
+
+        dialog.test_btn.click()
+
+        assert attempts["count"] == 2
+        assert called["info"] is True
 
     def test_existing_groups_populated(self, qtbot: QtBot):
         """Test that existing groups are populated in dropdown."""
