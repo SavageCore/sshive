@@ -26,7 +26,7 @@ test-watch:  ## Run tests in watch mode
 	uv run ptw .
 
 watch: ## Watch for changes and restart app
-	uv run python scripts/dev_watch.py
+	uv run --extra dev python scripts/dev_watch.py
 
 
 lint:  ## Check code with ruff

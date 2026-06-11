@@ -1,58 +1,56 @@
 import os
 import subprocess
 import sys
-import time
 
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
+from watchfiles import PythonFilter, watch
 
-
-class RestartHandler(FileSystemEventHandler):
-    def __init__(self, run_command, env=None):
-        self.run_command = run_command
-        self.env = env
-        self.process = None
-        self.start_app()
-
-    def start_app(self):
-        if self.process:
-            print("Stopping application...")
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-
-        print(f"Starting application: {' '.join(self.run_command)}")
-        self.process = subprocess.Popen(self.run_command, env=self.env)
-
-    def on_modified(self, event):
-        if event.is_directory:
-            return
-        if event.src_path.endswith(".py"):
-            print(f"File changed: {event.src_path}. Restarting...")
-            self.start_app()
+PATH = "sshive"
+COMMAND = [sys.executable, "-m", "sshive.main"]
+POLL_TIMEOUT_MS = 1_000
 
 
-if __name__ == "__main__":
-    path = "sshive"
-    # Using 'sshive' console script
-    # Use python -m with PYTHONPATH=. to ensure local source is used and bypass caching
-    command = [sys.executable, "-m", "sshive.main"]
+def start_app(env):
+    print(f"Starting application: {' '.join(COMMAND)}")
+    return subprocess.Popen(COMMAND, env=env)
+
+
+def stop_app(process):
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+
+
+def main():
     env = os.environ.copy()
     env["PYTHONPATH"] = "."
 
-    print(f"Watching directory '{path}' for changes...")
-    event_handler = RestartHandler(command, env=env)
-    observer = Observer()
-    observer.schedule(event_handler, path, recursive=True)
-    observer.start()
+    process = start_app(env)
+    print(f"Watching '{PATH}' for changes...")
 
     try:
-        while True:
-            time.sleep(1)
+        for changes in watch(
+            PATH,
+            watch_filter=PythonFilter(),
+            yield_on_timeout=True,
+            rust_timeout=POLL_TIMEOUT_MS,
+        ):
+            if process.poll() is not None:
+                print("Application exited, stopping watcher.")
+                return
+            if not changes:
+                continue
+            print(f"Changes detected: {changes}. Restarting...")
+            stop_app(process)
+            process = start_app(env)
     except KeyboardInterrupt:
-        observer.stop()
-        if event_handler.process:
-            event_handler.process.terminate()
-    observer.join()
+        pass
+    finally:
+        stop_app(process)
+
+
+if __name__ == "__main__":
+    main()
