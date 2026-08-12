@@ -200,7 +200,7 @@ SSHive relies on your system's utilities to actually perform the SSH connection 
   - Requires `ssh` (OpenSSH client, usually pre-installed).
   - For **Password Auth**, `sshpass` must be installed.
   - For **.ppk Key Auth**, `puttygen` (from the `putty-tools` package) must be installed to convert the keys dynamically.
-  - **Supported Terminals:** konsole, gnome-terminal, alacritty, kitty, xterm, tilix, terminator, iTerm2, Terminal.app.
+  - **Supported Terminals:** konsole, gnome-terminal, alacritty, kitty, ghostty, xterm, tilix, terminator, iTerm2, Terminal.app.
   - **Tunneling:** Works with the standard `ssh` command; no additional tools required for tunnels (local, remote, or dynamic forwarding).
 - **Windows:**
   - Requires `ssh` (usually pre-installed with Windows 10/11).

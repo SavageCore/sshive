@@ -1548,7 +1548,12 @@ class MainWindow(QMainWindow):
         else:
             # Launch terminal shell connection
             preferred_terminal = self.settings.value("preferred_terminal", "auto")
-            success = SSHLauncher.launch(connection, preferred_terminal=preferred_terminal)
+            reuse_terminal = self.settings.value("reuse_terminal", "false") == "true"
+            success = SSHLauncher.launch(
+                connection,
+                preferred_terminal=preferred_terminal,
+                reuse_terminal=reuse_terminal,
+            )
 
             if not success:
                 QMessageBox.warning(
@@ -1692,6 +1697,10 @@ class MainWindow(QMainWindow):
             # Save preferred terminal
             preferred_terminal = settings.get("preferred_terminal", "auto")
             self.settings.setValue("preferred_terminal", preferred_terminal)
+
+            # Save reuse-terminal (new tab) preference
+            reuse_terminal = settings.get("reuse_terminal", False)
+            self.settings.setValue("reuse_terminal", reuse_terminal)
 
             # Save theme preference and apply
             theme_val = settings.get("theme_preference", "System")

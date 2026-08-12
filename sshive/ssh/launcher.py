@@ -107,10 +107,55 @@ class SSHLauncher:
                 "xfce4-terminal": ["xfce4-terminal", "-e"],
                 "alacritty": ["alacritty", "-e"],
                 "kitty": ["kitty"],
+                "ghostty": ["ghostty", "-e"],
                 "tilix": ["tilix", "-e"],
                 "terminator": ["terminator", "-e"],
                 "xterm": ["xterm", "-e"],
             }
+
+    @staticmethod
+    def _get_kde_default_terminal() -> str | None:
+        """Return the default terminal configured in KDE, or None.
+
+        Reads the ``TerminalApplication`` key from ``~/.config/kdeglobals``
+        (section ``[General]``) and maps the stored value onto one of the
+        known terminal names from :meth:`get_terminals`. Values may be a
+        plain binary name (``ghostty``), a path (``/usr/bin/konsole``) or a
+        desktop-file id (``org.kde.konsole.desktop``).
+
+        Returns:
+            A known terminal name (e.g. ``"konsole"``) or ``None`` if KDE is
+            not in use, the value is empty, or it does not match a known
+            terminal.
+        """
+        if sys.platform == "win32":
+            return None
+        kdeglobals = Path.home() / ".config" / "kdeglobals"
+        if not kdeglobals.exists():
+            return None
+        try:
+            app = None
+            in_general = False
+            for raw in kdeglobals.read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = raw.strip()
+                if line.startswith("[") and line.endswith("]"):
+                    in_general = line.lower() == "[general]"
+                elif in_general and line.startswith("TerminalApplication="):
+                    app = line.split("=", 1)[1].strip().strip('"')
+                    break
+            if not app:
+                return None
+            name = os.path.basename(app)
+            if name.lower().endswith(".desktop"):
+                name = name[: -len(".desktop")]
+            # Desktop-file ids may be fully qualified, e.g. org.kde.konsole
+            if "." in name:
+                name = name.rsplit(".", 1)[-1]
+            if name in SSHLauncher.get_terminals():
+                return name
+        except OSError:
+            pass
+        return None
 
     @staticmethod
     def _convert_ppk_key(key_path: str, prefix: str = "sshive_key_") -> str | None:
@@ -191,6 +236,16 @@ class SSHLauncher:
                 elif SSHLauncher._which(cmd[0]):
                     return preferred_terminal, cmd
 
+        # In "auto" mode, honour the terminal configured as KDE's default
+        # application (stored in ~/.config/kdeglobals) before falling back to
+        # the first available terminal on PATH.
+        if preferred_terminal == "auto":
+            kde_default = SSHLauncher._get_kde_default_terminal()
+            if kde_default:
+                cmd = terminals[kde_default]
+                if cmd[0] == "open" or SSHLauncher._which(cmd[0]):
+                    return kde_default, cmd
+
         # Otherwise, return the first available terminal in the list
         for term_name, cmd_template in terminals.items():
             if cmd_template[0] == "open" or SSHLauncher._which(cmd_template[0]):
@@ -200,13 +255,17 @@ class SSHLauncher:
         return "xterm", ["xterm", "-e"]
 
     @staticmethod
-    def launch(connection: SSHConnection, preferred_terminal: str = "auto") -> bool:
+    def launch(connection: SSHConnection, preferred_terminal: str = "auto", reuse_terminal: bool = False) -> bool:
         """
         Launch an SSH connection in the user's chosen or auto-detected terminal emulator.
 
         Args:
             connection: The SSHConnection object containing connection details.
             preferred_terminal: The terminal emulator to use (e.g., "iTerm", "Terminal", "alacritty", etc.), or "auto" to auto-detect.
+            reuse_terminal: If True and the active terminal supports it, open the
+                connection in a new tab of an existing terminal window instead of
+                creating a new window. Terminals without tab support fall back to
+                opening a new window silently.
 
         Returns:
             True if the terminal was successfully launched, False otherwise.
@@ -260,6 +319,7 @@ class SSHLauncher:
                     "gnome-terminal",
                     "xfce4-terminal",
                     "alacritty",
+                    "ghostty",
                     "tilix",
                     "terminator",
                     "xterm",
@@ -268,7 +328,15 @@ class SSHLauncher:
             ):
                 cmd_str = " ".join([f'"{arg}"' if " " in arg else arg for arg in ssh_cmd])
                 wrapped_cmd = f"{cmd_str} || {{ echo -v; echo '----------------------------------------'; echo 'Connection failed or closed.'; read -p 'Press Enter to close...'; }}"
-                full_cmd = terminal_cmd + ["bash", "-c", wrapped_cmd]
+                if reuse_terminal:
+                    if terminal_name == "konsole":
+                        full_cmd = ["konsole", "--new-tab", "-e", "bash", "-c", wrapped_cmd]
+                    elif terminal_name == "gnome-terminal":
+                        full_cmd = ["gnome-terminal", "--tab", "--", "bash", "-c", wrapped_cmd]
+                    else:
+                        full_cmd = terminal_cmd + ["bash", "-c", wrapped_cmd]
+                else:
+                    full_cmd = terminal_cmd + ["bash", "-c", wrapped_cmd]
 
             elif terminal_name in ["kitty"]:
                 full_cmd = terminal_cmd + ssh_cmd
@@ -278,16 +346,28 @@ class SSHLauncher:
 
             elif terminal_name == "iTerm":
                 ssh_script = " ".join([f'"{arg}"' if " " in arg else arg for arg in ssh_cmd])
-                osa_script = (
-                    'tell application "iTerm"\n'
-                    "    try\n"
-                    f'        set newWindow to (create window with default profile command "{ssh_script}")\n'
-                    "    on error\n"
-                    f'        tell current window to create tab with default profile command "{ssh_script}"\n'
-                    "    end try\n"
-                    "    activate\n"
-                    "end tell"
-                )
+                if reuse_terminal:
+                    osa_script = (
+                        'tell application "iTerm"\n'
+                        "    try\n"
+                        f'        tell current window to create tab with default profile command "{ssh_script}"\n'
+                        "    on error\n"
+                        f'        set newWindow to (create window with default profile command "{ssh_script}")\n'
+                        "    end try\n"
+                        "    activate\n"
+                        "end tell"
+                    )
+                else:
+                    osa_script = (
+                        'tell application "iTerm"\n'
+                        "    try\n"
+                        f'        set newWindow to (create window with default profile command "{ssh_script}")\n'
+                        "    on error\n"
+                        f'        tell current window to create tab with default profile command "{ssh_script}"\n'
+                        "    end try\n"
+                        "    activate\n"
+                        "end tell"
+                    )
                 full_cmd = ["osascript", "-e", osa_script]
 
             elif terminal_name == "Terminal":

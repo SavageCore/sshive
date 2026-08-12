@@ -48,6 +48,115 @@ class TestSSHLauncher:
         # Should fallback to xterm
         assert terminal_name == "xterm"
 
+    @patch("sshive.ssh.launcher.Path.home")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
+    def test_detect_terminal_kde_default(self, mock_which, mock_home):
+        """Test that KDE default terminal is honoured when preferred is 'auto'."""
+        import tempfile
+
+        mock_which.return_value = "/usr/bin/konsole"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir) / ".config"
+            config_dir.mkdir()
+            kdeglobals = config_dir / "kdeglobals"
+            kdeglobals.write_text("[General]\nTerminalApplication=org.kde.konsole.desktop\n")
+            mock_home.return_value = Path(tmpdir)
+
+            with patch("sys.platform", "linux"):
+                terminal_name, cmd_template = SSHLauncher.detect_terminal()
+
+        assert terminal_name == "konsole"
+        assert cmd_template[0] == "konsole"
+
+    @patch("sshive.ssh.launcher.SSHLauncher._get_kde_default_terminal")
+    @patch("sshive.ssh.launcher.SSHLauncher._which")
+    def test_detect_terminal_explicit_beats_kde(self, mock_which, mock_kde):
+        """An explicit preferred terminal takes precedence over the KDE default."""
+        mock_kde.return_value = "konsole"
+        mock_which.side_effect = lambda cmd: "/usr/bin/xterm" if cmd == "xterm" else None
+
+        with patch("sys.platform", "linux"):
+            terminal_name, cmd_template = SSHLauncher.detect_terminal("xterm")
+
+        assert terminal_name == "xterm"
+        mock_kde.assert_not_called()
+
+    def test_get_terminals_linux_includes_ghostty(self):
+        """Ghostty is in the Linux terminal catalog."""
+        with patch("sys.platform", "linux"):
+            terminals = SSHLauncher.get_terminals()
+        assert "ghostty" in terminals
+        assert terminals["ghostty"] == ["ghostty", "-e"]
+
+    @patch("subprocess.Popen")
+    @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
+    def test_launch_ghostty(self, mock_detect, mock_popen):
+        """Launching with ghostty wraps the ssh command with bash -c."""
+        mock_detect.return_value = ("ghostty", ["ghostty", "-e"])
+        mock_popen.return_value = MagicMock()
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser")
+
+        with patch("sys.platform", "linux"):
+            result = SSHLauncher.launch(conn)
+
+        assert result is True
+        call_args = mock_popen.call_args[0][0]
+        assert call_args[0] == "ghostty"
+        assert "bash" in call_args
+        assert "ssh" in call_args[-1]
+
+    @patch("subprocess.Popen")
+    @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
+    def test_launch_reuse_terminal_konsole(self, mock_detect, mock_popen):
+        """Reuse terminal adds --new-tab for konsole."""
+        mock_detect.return_value = ("konsole", ["konsole", "-e"])
+        mock_popen.return_value = MagicMock()
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser")
+
+        with patch("sys.platform", "linux"):
+            SSHLauncher.launch(conn, reuse_terminal=True)
+
+        call_args = mock_popen.call_args[0][0]
+        assert "--new-tab" in call_args
+        assert call_args[0] == "konsole"
+
+    @patch("subprocess.Popen")
+    @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
+    def test_launch_reuse_terminal_gnome_terminal(self, mock_detect, mock_popen):
+        """Reuse terminal adds --tab for gnome-terminal."""
+        mock_detect.return_value = ("gnome-terminal", ["gnome-terminal", "--"])
+        mock_popen.return_value = MagicMock()
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser")
+
+        with patch("sys.platform", "linux"):
+            SSHLauncher.launch(conn, reuse_terminal=True)
+
+        call_args = mock_popen.call_args[0][0]
+        assert "--tab" in call_args
+        assert call_args[0] == "gnome-terminal"
+
+    @patch("subprocess.Popen")
+    @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
+    def test_launch_reuse_terminal_unsupported_falls_back(self, mock_detect, mock_popen):
+        """Reuse terminal falls back to a new window for terminals without tabs."""
+        mock_detect.return_value = ("alacritty", ["alacritty", "-e"])
+        mock_popen.return_value = MagicMock()
+
+        conn = SSHConnection(name="Test", host="example.com", user="testuser")
+
+        with patch("sys.platform", "linux"):
+            SSHLauncher.launch(conn, reuse_terminal=True)
+
+        call_args = mock_popen.call_args[0][0]
+        assert call_args[0] == "alacritty"
+        assert "--new-tab" not in call_args
+        assert "--tab" not in call_args
+        assert "bash" in call_args
+
     @patch("subprocess.Popen")
     @patch("sshive.ssh.launcher.SSHLauncher.detect_terminal")
     def test_launch_basic_connection(self, mock_detect, mock_popen):

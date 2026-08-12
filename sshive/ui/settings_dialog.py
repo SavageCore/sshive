@@ -105,6 +105,21 @@ class SettingsDialog(QDialog):
         gen_layout.addWidget(self.terminal_label)
         gen_layout.addWidget(self.terminal_combo)
 
+        self.reuse_terminal_check = QCheckBox(
+            self.tr("Open connections as new tabs in the existing terminal window")
+        )
+        self.reuse_terminal_check.setToolTip(
+            self.tr(
+                "When enabled, new connections open as tabs in a running terminal "
+                "window instead of launching separate windows. Supported on: konsole "
+                "(--new-tab), gnome-terminal (--tab), and iTerm2. Other terminals "
+                "(including Ghostty 1.3.x, which has no tab CLI) open a new window."
+            )
+        )
+        reuse_val = self.settings.value("reuse_terminal", "false")
+        self.reuse_terminal_check.setChecked(reuse_val == "true" or reuse_val is True)
+        gen_layout.addWidget(self.reuse_terminal_check)
+
         self.verify_check = QCheckBox(self.tr("Verify credentials before connecting"))
         self.verify_check.setToolTip(
             self.tr("Performs a quick background check before launching the terminal.")
@@ -265,4 +280,5 @@ class SettingsDialog(QDialog):
         }
         if self.terminal_combo:
             settings["preferred_terminal"] = self.terminal_combo.currentData()
+            settings["reuse_terminal"] = self.reuse_terminal_check.isChecked()
         return settings

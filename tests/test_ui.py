@@ -984,6 +984,27 @@ class TestSettingsDialog:
         assert "save_recent_history" in result
         assert result["save_recent_history"] is True
 
+    def test_get_settings_includes_reuse_terminal(self, dialog):
+        """get_settings() includes reuse-terminal toggle and defaults to disabled."""
+        result = dialog.get_settings()
+        assert "reuse_terminal" in result
+        assert result["reuse_terminal"] is False
+
+    def test_reuse_terminal_saved_true(self, qtbot: QtBot, mock_settings, mock_i18n_dir):
+        """reuse_terminal checkbox reflects a saved 'true' value."""
+        mock_settings.value.side_effect = lambda key, default=None: (
+            "true" if key == "reuse_terminal" else default
+        )
+        dlg = SettingsDialog(
+            settings=mock_settings,
+            column_names=["Name"],
+            hidden_columns=[],
+            i18n_dir=mock_i18n_dir,
+        )
+        qtbot.addWidget(dlg)
+        assert dlg.reuse_terminal_check.isChecked() is True
+        assert dlg.get_settings()["reuse_terminal"] is True
+
     def test_restart_label_hidden_by_default(self, dialog):
         """Restart warning label is hidden when dialog opens."""
         assert dialog.lang_restart_label.isHidden()
